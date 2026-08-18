@@ -1,0 +1,13 @@
+services:
+  api:
+    build:
+      context: .
+      target: development
+    environment:
+      NODE_ENV: development
+      DB_SYNCHRONIZE: "true"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - petzi_uploads:/app/uploads
+    command: npm run start:dev

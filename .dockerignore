@@ -1,0 +1,19 @@
+# Dependencies
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+dist
+coverage
+test
+*.md
+.vscode
+.idea
+uploads
+*.spec.ts
+.dockerignore
+Dockerfile
+docker-compose*.yml
