@@ -29,6 +29,7 @@ function setupSwagger(app: NestExpressApplication): void {
       'Pets',
       'Pet registration — draft, update, vaccines, documents, submit',
     )
+    .addTag('Addresses', 'User address CRUD and default-address selection')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

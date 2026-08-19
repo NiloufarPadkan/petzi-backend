@@ -45,3 +45,4 @@ lerna-debug.log*
 !/uploads/profile-pictures/.gitkeep
 !/uploads/pet-documents/.gitkeep
 !/uploads/pet-documents/.gitkeep
+.claude/settings.json

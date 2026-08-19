@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  Patch,
   Post,
   Req,
   UploadedFile,
@@ -27,6 +29,9 @@ import { removeUploadUrls } from '../../common/utils/upload-cleanup';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { SendOtpDto, VerifyOtpDto } from './dto/phone-otp.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { GoogleAuthGuard, JwtAuthGuard } from './guards/auth.guards';
 import type { AuthenticatedRequest } from './interfaces/auth.interface';
 
@@ -152,5 +157,47 @@ export class AuthController {
   @ApiOperation({ summary: 'Get the current authenticated user' })
   getProfile(@Req() req: AuthenticatedRequest) {
     return this.authService.getProfile(req.user.sub);
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary: 'Update the current user profile (partial)',
+    description: 'Send any subset of fullName, email, dateOfBirth.',
+  })
+  updateProfile(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.authService.updateProfile(req.user.sub, dto);
+  }
+
+  @Patch('me/password')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Change the current user password' })
+  changePassword(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(req.user.sub, dto);
+  }
+
+  @Delete('me')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary: 'Delete (soft-delete) the current account',
+    description:
+      'Requires currentPassword for accounts with a password set. Google-only accounts can omit it.',
+  })
+  deleteAccount(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: DeleteAccountDto,
+  ) {
+    return this.authService.deleteAccount(req.user.sub, dto);
   }
 }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 
 @Injectable()
@@ -8,6 +8,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findByPhone(phoneNumber: string): Promise<User | null> {
@@ -31,6 +32,7 @@ export class UsersService {
       .createQueryBuilder('user')
       .addSelect('user.password')
       .where('user.id = :id', { id })
+      .andWhere('user.deletedAt IS NULL')
       .getOne();
   }
 
@@ -46,5 +48,18 @@ export class UsersService {
       throw new Error('User not found after update');
     }
     return user;
+  }
+
+  async softDeleteAccount(user: User): Promise<void> {
+    const suffix = `deleted_${Date.now()}_${user.id}`;
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(User, user.id, {
+        phoneNumber: `${suffix}_${user.phoneNumber}`,
+        email: user.email ? `${suffix}_${user.email}` : user.email,
+        googleId: user.googleId ? `${suffix}_${user.googleId}` : user.googleId,
+      });
+      await manager.softDelete(User, user.id);
+    });
   }
 }

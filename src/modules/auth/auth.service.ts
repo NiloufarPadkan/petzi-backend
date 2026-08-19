@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -16,6 +17,9 @@ import { SmsService } from '../sms/sms.service';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { JwtPayload } from './interfaces/auth.interface';
 
 @Injectable()
@@ -177,6 +181,118 @@ export class AuthService {
     return this.sanitizeUser(user);
   }
 
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    if (
+      dto.fullName === undefined &&
+      dto.email === undefined &&
+      dto.dateOfBirth === undefined
+    ) {
+      throw new BadRequestException('حداقل یک فیلد باید ارسال شود');
+    }
+
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+
+    const changes: Partial<User> = {};
+
+    if (dto.fullName !== undefined) {
+      changes.fullName = dto.fullName;
+    }
+
+    if (dto.dateOfBirth !== undefined) {
+      if (new Date(`${dto.dateOfBirth}T00:00:00.000Z`) > new Date()) {
+        throw new BadRequestException('تاریخ تولد نمی‌تواند در آینده باشد');
+      }
+      changes.dateOfBirth = dto.dateOfBirth;
+    }
+
+    if (dto.email !== undefined) {
+      const normalizedEmail = dto.email.trim().toLowerCase();
+      if (normalizedEmail !== user.email) {
+        const existingEmail =
+          await this.usersService.findByEmail(normalizedEmail);
+        if (existingEmail) {
+          throw new ConflictException('این ایمیل قبلاً ثبت شده است');
+        }
+        changes.email = normalizedEmail;
+        changes.isEmailVerified = false;
+      }
+    }
+
+    let updated = user;
+    if (Object.keys(changes).length > 0) {
+      try {
+        updated = await this.usersService.update(userId, changes);
+      } catch (error) {
+        if (this.isUniqueConstraintError(error)) {
+          throw new ConflictException('این ایمیل قبلاً ثبت شده است');
+        }
+        throw error;
+      }
+    }
+
+    return this.sanitizeUser(updated);
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.usersService.findByIdWithPassword(userId);
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+
+    if (!user.password) {
+      throw new BadRequestException(
+        'این حساب رمز عبور ندارد؛ از ورود با گوگل استفاده کنید',
+      );
+    }
+
+    const currentPasswordValid = await bcrypt.compare(
+      dto.currentPassword,
+      user.password,
+    );
+    if (!currentPasswordValid) {
+      throw new UnauthorizedException('رمز عبور فعلی نادرست است');
+    }
+
+    const sameAsOld = await bcrypt.compare(dto.newPassword, user.password);
+    if (sameAsOld) {
+      throw new BadRequestException(
+        'رمز عبور جدید نمی‌تواند با رمز عبور فعلی یکسان باشد',
+      );
+    }
+
+    const hashed = await bcrypt.hash(dto.newPassword, 12);
+    await this.usersService.update(userId, { password: hashed });
+
+    return { message: 'رمز عبور با موفقیت تغییر کرد' };
+  }
+
+  async deleteAccount(userId: string, dto: DeleteAccountDto) {
+    const user = await this.usersService.findByIdWithPassword(userId);
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+
+    if (user.password) {
+      if (!dto.currentPassword) {
+        throw new BadRequestException('رمز عبور فعلی الزامی است');
+      }
+      const currentPasswordValid = await bcrypt.compare(
+        dto.currentPassword,
+        user.password,
+      );
+      if (!currentPasswordValid) {
+        throw new UnauthorizedException('رمز عبور فعلی نادرست است');
+      }
+    }
+
+    await this.usersService.softDeleteAccount(user);
+
+    return { message: 'حساب کاربری با موفقیت حذف شد' };
+  }
+
   private async sendOtpWithCooldown(
     phoneNumber: string,
     purpose: OtpPurpose,
@@ -228,9 +344,10 @@ export class AuthService {
     const isDev = this.configService.get<string>('nodeEnv') === 'development';
 
     return {
-      message: isDev && code
-        ? 'کد تأیید ارسال شد'
-        : 'اگر شماره واجد شرایط باشد، کد تأیید ارسال می‌شود',
+      message:
+        isDev && code
+          ? 'کد تأیید ارسال شد'
+          : 'اگر شماره واجد شرایط باشد، کد تأیید ارسال می‌شود',
       expiresIn: this.configService.get<number>('otp.expiresInSeconds'),
       ...(isDev && code ? { code } : {}),
     };

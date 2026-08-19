@@ -10,11 +10,13 @@ import configuration from './config/configuration';
 import { validateEnvironment } from './config/environment.validation';
 import { AuthModule } from './modules/auth/auth.module';
 import { PetsModule } from './modules/pets/pets.module';
+import { AddressesModule } from './modules/addresses/addresses.module';
 import { User } from './modules/users/entities/user.entity';
 import { Otp } from './modules/otp/entities/otp.entity';
 import { Pet } from './modules/pets/entities/pet.entity';
 import { PetVaccine } from './modules/pets/entities/pet-vaccine.entity';
 import { PetDocument } from './modules/pets/entities/pet-document.entity';
+import { Address } from './modules/addresses/entities/address.entity';
 
 @Module({
   imports: [
@@ -33,7 +35,7 @@ import { PetDocument } from './modules/pets/entities/pet-document.entity';
         username: configService.get<string>('database.username'),
         password: configService.get<string>('database.password'),
         database: configService.get<string>('database.database'),
-        entities: [User, Otp, Pet, PetVaccine, PetDocument],
+        entities: [User, Otp, Pet, PetVaccine, PetDocument, Address],
         synchronize: configService.get<boolean>('database.synchronize'),
         logging: configService.get<string>('nodeEnv') === 'development',
       }),
@@ -46,6 +48,7 @@ import { PetDocument } from './modules/pets/entities/pet-document.entity';
     ]),
     AuthModule,
     PetsModule,
+    AddressesModule,
   ],
   controllers: [AppController],
   providers: [
