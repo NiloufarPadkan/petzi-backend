@@ -24,6 +24,11 @@ export default () => ({
       process.env.GOOGLE_CALLBACK_URL ??
       'http://localhost:3000/api/v1/auth/google/callback',
   },
+  frontend: {
+    redirectUrl:
+      process.env.FRONTEND_REDIRECT_URL ??
+      'http://localhost:5173/auth/callback',
+  },
   otp: {
     expiresInSeconds: parseInt(process.env.OTP_EXPIRES_IN_SECONDS ?? '120', 10),
     resendCooldownSeconds: parseInt(

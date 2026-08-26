@@ -173,6 +173,17 @@ export class AuthService {
     return this.buildAuthResponse(user, 'ورود با گوگل موفقیت‌آمیز بود');
   }
 
+  buildFrontendRedirectUrl(params: Record<string, string>): string {
+    const base =
+      this.configService.get<string>('frontend.redirectUrl') ??
+      'http://localhost:5173/auth/callback';
+    const url = new URL(base);
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, value);
+    }
+    return url.toString();
+  }
+
   async getProfile(userId: string) {
     const user = await this.usersService.findById(userId);
     if (!user) {

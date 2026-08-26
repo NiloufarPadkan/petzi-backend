@@ -4,13 +4,16 @@ import {
   Controller,
   Delete,
   Get,
+  HttpException,
   Patch,
   Post,
   Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import {
@@ -144,11 +147,31 @@ export class AuthController {
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
-  @ApiOperation({ summary: 'Google OAuth callback' })
+  @ApiOperation({
+    summary: 'Google OAuth callback',
+    description:
+      'Exchanges the Google code for a session, then redirects to FRONTEND_REDIRECT_URL with accessToken (or error).',
+  })
   async googleAuthCallback(
     @Req() req: { user: Parameters<AuthService['handleGoogleLogin']>[0] },
+    @Res() res: Response,
   ) {
-    return this.authService.handleGoogleLogin(req.user);
+    try {
+      const { accessToken } = await this.authService.handleGoogleLogin(
+        req.user,
+      );
+      return res.redirect(
+        this.authService.buildFrontendRedirectUrl({ accessToken }),
+      );
+    } catch (error) {
+      const message =
+        error instanceof HttpException
+          ? error.message
+          : 'ورود با گوگل ناموفق بود';
+      return res.redirect(
+        this.authService.buildFrontendRedirectUrl({ error: message }),
+      );
+    }
   }
 
   @Get('me')
