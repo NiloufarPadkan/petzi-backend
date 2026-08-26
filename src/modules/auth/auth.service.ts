@@ -16,10 +16,12 @@ import { OtpService } from '../otp/otp.service';
 import { SmsService } from '../sms/sms.service';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { AdminLoginDto } from './dto/admin-login.dto';
 import { JwtPayload } from './interfaces/auth.interface';
 
 @Injectable()
@@ -130,6 +132,23 @@ export class AuthService {
     const user = await this.usersService.findByPhone(normalized);
     if (!user) {
       throw new NotFoundException('کاربری با این شماره موبایل یافت نشد');
+    }
+
+    return this.buildAuthResponse(user, 'ورود با موفقیت انجام شد');
+  }
+
+  async adminLogin(dto: AdminLoginDto) {
+    const user = await this.usersService.findByUsernameWithPassword(
+      dto.username,
+    );
+
+    if (
+      !user ||
+      user.role !== UserRole.ADMIN ||
+      !user.password ||
+      !(await bcrypt.compare(dto.password, user.password))
+    ) {
+      throw new UnauthorizedException('نام کاربری یا رمز عبور نادرست است');
     }
 
     return this.buildAuthResponse(user, 'ورود با موفقیت انجام شد');
@@ -334,7 +353,7 @@ export class AuthService {
 
   private buildAuthResponse(user: User, message: string) {
     const accessToken = this.signToken(
-      { sub: user.id, type: 'access' },
+      { sub: user.id, role: user.role, type: 'access' },
       this.configService.get<string>('jwt.expiresIn')!,
     );
 

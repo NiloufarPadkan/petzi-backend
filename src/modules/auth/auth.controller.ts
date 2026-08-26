@@ -35,6 +35,7 @@ import { SendOtpDto, VerifyOtpDto } from './dto/phone-otp.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { AdminLoginDto } from './dto/admin-login.dto';
 import { GoogleAuthGuard, JwtAuthGuard } from './guards/auth.guards';
 import type { AuthenticatedRequest } from './interfaces/auth.interface';
 
@@ -136,6 +137,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Verify login OTP and get an access token' })
   verifyLoginOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyLoginOtp(dto.phoneNumber, dto.code);
+  }
+
+  @Post('admin/login')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Admin login with username and password' })
+  adminLogin(@Body() dto: AdminLoginDto) {
+    return this.authService.adminLogin(dto);
   }
 
   @Get('google')

@@ -6,11 +6,27 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
 } from 'typeorm';
+import { UserRole } from '../../../common/enums/user-role.enum';
+
+export interface NotificationPreferences {
+  newsletter: boolean;
+  reservationAlerts: boolean;
+  messageAlerts: boolean;
+}
+
+export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  newsletter: false,
+  reservationAlerts: true,
+  messageAlerts: true,
+};
 
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ unique: true, nullable: true })
+  username: string;
 
   @Column({ unique: true })
   phoneNumber: string;
@@ -38,6 +54,18 @@ export class User {
 
   @Column({ default: false })
   isEmailVerified: boolean;
+
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
+  role: UserRole;
+
+  @Column({ type: 'jsonb', default: DEFAULT_NOTIFICATION_PREFERENCES })
+  notificationPreferences: NotificationPreferences;
+
+  @Column({ type: 'text', nullable: true })
+  statusChangeReason: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  adminNotes: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

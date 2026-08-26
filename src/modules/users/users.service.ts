@@ -15,6 +15,15 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { phoneNumber } });
   }
 
+  async findByUsernameWithPassword(username: string): Promise<User | null> {
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('user.username = :username', { username })
+      .andWhere('user.deletedAt IS NULL')
+      .getOne();
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
   }

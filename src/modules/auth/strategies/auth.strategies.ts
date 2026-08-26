@@ -27,7 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!user) {
       throw new UnauthorizedException('کاربر این توکن دیگر وجود ندارد');
     }
-    return payload;
+    return { ...payload, role: user.role };
   }
 }
 
