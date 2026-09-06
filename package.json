@@ -98,5 +98,10 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "allowScripts": {
+    "@scarf/scarf@1.4.0": true,
+    "bcrypt@6.0.0": true,
+    "unrs-resolver@1.12.2": true
   }
 }
