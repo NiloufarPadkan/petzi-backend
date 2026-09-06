@@ -20,6 +20,7 @@ import { PetVaccine } from './modules/pets/entities/pet-vaccine.entity';
 import { PetDocument } from './modules/pets/entities/pet-document.entity';
 import { Address } from './modules/addresses/entities/address.entity';
 import { Subscription } from './modules/subscriptions/entities/subscription.entity';
+import { OneTimeToken } from './modules/auth/entities/one-time-token.entity';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { Subscription } from './modules/subscriptions/entities/subscription.enti
           PetDocument,
           Address,
           Subscription,
+          OneTimeToken,
         ],
         synchronize: configService.get<boolean>('database.synchronize'),
         logging: configService.get<string>('nodeEnv') === 'development',
