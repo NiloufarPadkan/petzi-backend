@@ -8,6 +8,7 @@ import { PetVaccine } from '../modules/pets/entities/pet-vaccine.entity';
 import { PetDocument } from '../modules/pets/entities/pet-document.entity';
 import { Address } from '../modules/addresses/entities/address.entity';
 import { Subscription } from '../modules/subscriptions/entities/subscription.entity';
+import { OneTimeToken } from '../modules/auth/entities/one-time-token.entity';
 
 const migrationsExtension = __filename.endsWith('.ts') ? 'ts' : 'js';
 
@@ -18,7 +19,16 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME ?? 'postgres',
   password: process.env.DB_PASSWORD ?? 'postgres',
   database: process.env.DB_DATABASE ?? 'petzi',
-  entities: [User, Otp, Pet, PetVaccine, PetDocument, Address, Subscription],
+  entities: [
+    User,
+    Otp,
+    Pet,
+    PetVaccine,
+    PetDocument,
+    Address,
+    Subscription,
+    OneTimeToken,
+  ],
   migrations: [join(__dirname, '..', 'migrations', `*.${migrationsExtension}`)],
   synchronize: false,
 });

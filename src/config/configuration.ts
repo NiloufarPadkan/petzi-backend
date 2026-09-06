@@ -35,6 +35,14 @@ export default () => ({
       process.env.OTP_RESEND_COOLDOWN_SECONDS ?? '60',
       10,
     ),
+    registrationTokenExpiresInSeconds: parseInt(
+      process.env.REGISTRATION_TOKEN_EXPIRES_IN_SECONDS ?? '900',
+      10,
+    ),
+    googleExchangeExpiresInSeconds: parseInt(
+      process.env.GOOGLE_EXCHANGE_EXPIRES_IN_SECONDS ?? '120',
+      10,
+    ),
   },
   sms: {
     provider: process.env.SMS_PROVIDER ?? 'mock',
