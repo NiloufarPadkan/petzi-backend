@@ -4,8 +4,6 @@ import {
   IsEmail,
   IsNotEmpty,
   IsString,
-  Length,
-  Matches,
   MaxLength,
 } from 'class-validator';
 import { IsIranianPhone } from '../../../common/validators/is-iranian-phone.validator';
@@ -17,11 +15,13 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'شماره موبایل الزامی است' })
   phoneNumber: string;
 
-  @ApiProperty({ example: '123456', description: '6-digit OTP from send-otp' })
+  @ApiProperty({
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'Short-lived registration token from register/verify-otp',
+  })
   @IsString()
-  @Length(6, 6, { message: 'کد تأیید باید ۶ رقم باشد' })
-  @Matches(/^\d{6}$/, { message: 'کد تأیید فقط باید شامل عدد باشد' })
-  code: string;
+  @IsNotEmpty({ message: 'توکن ثبت‌نام الزامی است' })
+  registrationToken: string;
 
   @ApiProperty({ example: 'علی محمدی' })
   @IsString()

@@ -35,6 +35,7 @@ import { SendOtpDto, VerifyOtpDto } from './dto/phone-otp.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { GoogleExchangeDto } from './dto/google-exchange.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { GoogleAuthGuard, JwtAuthGuard } from './guards/auth.guards';
 import type { AuthenticatedRequest } from './interfaces/auth.interface';
@@ -57,10 +58,20 @@ export class AuthController {
     return this.authService.sendRegisterOtp(dto.phoneNumber);
   }
 
+  @Post('register/verify-otp')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Verify registration OTP and receive a registration token',
+  })
+  verifyRegisterOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyRegisterOtp(dto.phoneNumber, dto.code);
+  }
+
   @Post('register')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
-    summary: 'Complete registration in one request (OTP + profile + password)',
+    summary:
+      'Complete registration (registration token + profile + password)',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({
@@ -68,7 +79,7 @@ export class AuthController {
       type: 'object',
       required: [
         'phoneNumber',
-        'code',
+        'registrationToken',
         'fullName',
         'email',
         'dateOfBirth',
@@ -76,7 +87,10 @@ export class AuthController {
       ],
       properties: {
         phoneNumber: { type: 'string', example: '09123456789' },
-        code: { type: 'string', example: '123456' },
+        registrationToken: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
         fullName: { type: 'string', example: 'علی محمدی' },
         email: { type: 'string', example: 'ali@example.com' },
         dateOfBirth: { type: 'string', example: '1990-01-15' },
@@ -158,18 +172,18 @@ export class AuthController {
   @ApiOperation({
     summary: 'Google OAuth callback',
     description:
-      'Exchanges the Google code for a session, then redirects to FRONTEND_REDIRECT_URL with accessToken (or error).',
+      'Creates a one-time exchange code, then redirects to FRONTEND_REDIRECT_URL with code (or error).',
   })
   async googleAuthCallback(
     @Req() req: { user: Parameters<AuthService['handleGoogleLogin']>[0] },
     @Res() res: Response,
   ) {
     try {
-      const { accessToken } = await this.authService.handleGoogleLogin(
+      const { exchangeCode } = await this.authService.handleGoogleLogin(
         req.user,
       );
       return res.redirect(
-        this.authService.buildFrontendRedirectUrl({ accessToken }),
+        this.authService.buildFrontendRedirectUrl({ code: exchangeCode }),
       );
     } catch (error) {
       const message =
@@ -180,6 +194,15 @@ export class AuthController {
         this.authService.buildFrontendRedirectUrl({ error: message }),
       );
     }
+  }
+
+  @Post('google/exchange')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Exchange a one-time Google callback code for an access token',
+  })
+  exchangeGoogleCode(@Body() dto: GoogleExchangeDto) {
+    return this.authService.exchangeGoogleCode(dto.code);
   }
 
   @Get('me')
@@ -216,6 +239,17 @@ export class AuthController {
     return this.authService.changePassword(req.user.sub, dto);
   }
 
+  @Post('me/delete/send-otp')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary: 'Send OTP to confirm account deletion (Iranian mobile accounts)',
+  })
+  sendDeleteAccountOtp(@Req() req: AuthenticatedRequest) {
+    return this.authService.sendDeleteAccountOtp(req.user.sub);
+  }
+
   @Delete('me')
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
@@ -223,7 +257,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Delete (soft-delete) the current account',
     description:
-      'Requires currentPassword for accounts with a password set. Google-only accounts can omit it.',
+      'Requires currentPassword or delete OTP when a password is set. Google-only accounts require a fresh googleExchangeCode (or delete OTP if a real mobile is linked).',
   })
   deleteAccount(
     @Req() req: AuthenticatedRequest,

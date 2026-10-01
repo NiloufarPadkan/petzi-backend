@@ -95,4 +95,47 @@ describe('OtpService', () => {
       service.verifyOtp('09123456789', '1234', OtpPurpose.LOGIN),
     ).resolves.toBe(false);
   });
+
+  it('enforces resend cooldown against used OTPs as well', async () => {
+    const repository = createRepository();
+    repository.findOne.mockResolvedValue({
+      id: 'otp-id',
+      isUsed: true,
+      createdAt: new Date(),
+    });
+    const service = new OtpService(
+      repository as unknown as Repository<Otp>,
+      configService as unknown as ConfigService,
+    );
+    // production path enforces cooldown
+    configService.get.mockImplementation((key: string) => {
+      const values: Record<string, string | number> = {
+        nodeEnv: 'production',
+        'otp.resendCooldownSeconds': 60,
+        'otp.expiresInSeconds': 120,
+        'jwt.secret': secret,
+      };
+      return values[key];
+    });
+
+    await expect(
+      service.createOtp('09123456789', OtpPurpose.LOGIN),
+    ).rejects.toThrow(/RESEND_COOLDOWN:/);
+  });
+
+  it('invalidates active unused OTPs', async () => {
+    const repository = createRepository();
+    repository.update.mockResolvedValue({ affected: 1 });
+    const service = new OtpService(
+      repository as unknown as Repository<Otp>,
+      configService as unknown as ConfigService,
+    );
+
+    await service.invalidateActiveOtps('09123456789', OtpPurpose.REGISTER);
+
+    expect(repository.update).toHaveBeenCalledWith(
+      { phoneNumber: '09123456789', purpose: OtpPurpose.REGISTER, isUsed: false },
+      { isUsed: true },
+    );
+  });
 });

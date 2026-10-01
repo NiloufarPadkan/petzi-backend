@@ -41,3 +41,8 @@ export function normalizePhoneNumber(phone: string): string {
   }
   return cleaned;
 }
+
+/** True for normalized Iranian mobiles (09xxxxxxxxx), not synthetic Google placeholders. */
+export function isNormalizedIranianMobile(phone: string): boolean {
+  return /^09\d{9}$/.test(phone);
+}

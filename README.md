@@ -6,9 +6,11 @@ NestJS backend for **Petzi** — a pet care mobile app with phone-based authenti
 
 - **Registration flow**:
   1. Send OTP to mobile number
-  2. Submit all registration data in one request (OTP + profile + password)
+  2. Verify OTP → receive short-lived `registrationToken`
+  3. Submit profile + password with the registration token
 - **Login flow**: Mobile OTP verification
-- **Google OAuth** login
+- **Google OAuth** login (one-time exchange code → access token)
+- Soft-delete account with password, delete OTP, or fresh Google exchange code
 - JWT-based session management
 - Persian validation error messages
 - Mock SMS in development (OTP logged to console)
@@ -99,7 +101,8 @@ See `.env.example` for all options. Key variables:
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | POST | `/api/v1/auth/register/send-otp` | — | Send registration OTP |
-| POST | `/api/v1/auth/register` | — | Complete registration (all fields + OTP) |
+| POST | `/api/v1/auth/register/verify-otp` | — | Verify OTP → `registrationToken` |
+| POST | `/api/v1/auth/register` | — | Complete registration (token + profile + password) |
 
 ### Login
 | Method | Path | Auth | Description |
@@ -111,8 +114,11 @@ See `.env.example` for all options. Key variables:
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/v1/auth/google` | — | Redirect to Google login |
-| GET | `/api/v1/auth/google/callback` | — | Google OAuth callback |
+| GET | `/api/v1/auth/google/callback` | — | Google OAuth callback (`?code=` one-time) |
+| POST | `/api/v1/auth/google/exchange` | — | Exchange Google one-time code for access token |
 | GET | `/api/v1/auth/me` | Access token | Get current user profile |
+| POST | `/api/v1/auth/me/delete/send-otp` | Access token | Send delete-account OTP |
+| DELETE | `/api/v1/auth/me` | Access token | Soft-delete (password, OTP, or Google exchange) |
 
 ### Pets
 | Method | Path | Auth | Description |
@@ -135,12 +141,17 @@ curl -X POST http://localhost:3000/api/v1/auth/register/send-otp \
   -H "Content-Type: application/json" \
   -d '{"phoneNumber": "09123456789"}'
 
-# 2. Register in one request (code from dev response / server logs)
+# 2. Verify OTP → registrationToken
+curl -X POST http://localhost:3000/api/v1/auth/register/verify-otp \
+  -H "Content-Type: application/json" \
+  -d '{"phoneNumber": "09123456789", "code": "123456"}'
+
+# 3. Complete registration with registrationToken
 curl -X POST http://localhost:3000/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "phoneNumber": "09123456789",
-    "code": "123456",
+    "registrationToken": "<token from step 2>",
     "fullName": "علی محمدی",
     "email": "ali@example.com",
     "dateOfBirth": "1990-01-15",
