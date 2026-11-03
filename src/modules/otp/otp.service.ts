@@ -50,11 +50,11 @@ export class OtpService {
     purpose: OtpPurpose,
     cooldown: number,
   ): Promise<void> {
+    // Count used and unused OTPs so exhausting failed attempts cannot bypass cooldown.
     const recentOtp = await this.otpRepository.findOne({
       where: {
         phoneNumber,
         purpose,
-        isUsed: false,
         createdAt: MoreThan(new Date(Date.now() - cooldown * 1000)),
       },
       order: { createdAt: 'DESC' },
@@ -66,6 +66,17 @@ export class OtpService {
       );
       throw new Error(`RESEND_COOLDOWN:${waitSeconds}`);
     }
+  }
+
+  /** Marks all unused OTPs for this phone+purpose as used (e.g. after SMS send failure). */
+  async invalidateActiveOtps(
+    phoneNumber: string,
+    purpose: OtpPurpose,
+  ): Promise<void> {
+    await this.otpRepository.update(
+      { phoneNumber, purpose, isUsed: false },
+      { isUsed: true },
+    );
   }
 
   async verifyOtp(

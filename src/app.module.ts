@@ -35,6 +35,7 @@ import { VetClinicService } from './modules/vets/entities/vet-clinic-service.ent
 import { VetWorkingHour } from './modules/vets/entities/vet-working-hour.entity';
 import { VetReview } from './modules/vets/entities/vet-review.entity';
 import { VetStatusLog } from './modules/vets/entities/vet-status-log.entity';
+import { OneTimeToken } from './modules/auth/entities/one-time-token.entity';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { VetStatusLog } from './modules/vets/entities/vet-status-log.entity';
           ClinicImage,
           ClinicReview,
           ClinicLog,
+          OneTimeToken,
         ],
         synchronize: configService.get<boolean>('database.synchronize'),
         logging: configService.get<string>('nodeEnv') === 'development',
