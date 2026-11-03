@@ -22,6 +22,13 @@ import { Address } from './modules/addresses/entities/address.entity';
 import { Subscription } from './modules/subscriptions/entities/subscription.entity';
 import { UserNote } from './modules/users/entities/user-note.entity';
 import { VetsModule } from './modules/vets/vets.module';
+import { ClinicsModule } from './modules/clinics/clinics.module';
+import { Clinic } from './modules/clinics/entities/clinic.entity';
+import { ClinicServiceItem } from './modules/clinics/entities/clinic-service-item.entity';
+import { ClinicWorkingHour } from './modules/clinics/entities/clinic-working-hour.entity';
+import { ClinicImage } from './modules/clinics/entities/clinic-image.entity';
+import { ClinicReview } from './modules/clinics/entities/clinic-review.entity';
+import { ClinicLog } from './modules/clinics/entities/clinic-log.entity';
 import { VetProfile } from './modules/vets/entities/vet-profile.entity';
 import { VetDocument } from './modules/vets/entities/vet-document.entity';
 import { VetClinicService } from './modules/vets/entities/vet-clinic-service.entity';
@@ -61,6 +68,12 @@ import { VetStatusLog } from './modules/vets/entities/vet-status-log.entity';
           VetWorkingHour,
           VetReview,
           VetStatusLog,
+          Clinic,
+          ClinicServiceItem,
+          ClinicWorkingHour,
+          ClinicImage,
+          ClinicReview,
+          ClinicLog,
         ],
         synchronize: configService.get<boolean>('database.synchronize'),
         logging: configService.get<string>('nodeEnv') === 'development',
@@ -78,6 +91,7 @@ import { VetStatusLog } from './modules/vets/entities/vet-status-log.entity';
     UsersModule,
     SubscriptionsModule,
     VetsModule,
+    ClinicsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -12,6 +12,7 @@ export class VetListItemDto {
   @ApiProperty() phoneNumber: string;
   @ApiProperty({ nullable: true }) profilePictureUrl: string | null;
   @ApiProperty() primarySpecialty: string;
+  @ApiProperty({ nullable: true }) clinicId: string | null;
   @ApiProperty({ nullable: true }) clinicName: string | null;
   @ApiProperty() city: string;
   @ApiProperty() medicalCouncilNumber: string;

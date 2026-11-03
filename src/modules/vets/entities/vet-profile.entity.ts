@@ -4,6 +4,7 @@ import {
   Entity,
   Index,
   JoinColumn,
+  ManyToOne,
   OneToOne,
   PrimaryColumn,
   UpdateDateColumn,
@@ -11,12 +12,14 @@ import {
 import { ApprovalStatus } from '../../../common/enums/approval-status.enum';
 import { PersonGender } from '../../../common/enums/person-gender.enum';
 import { VetCollaborationStatus } from '../../../common/enums/vet-collaboration-status.enum';
+import { Clinic } from '../../clinics/entities/clinic.entity';
 import { User } from '../../users/entities/user.entity';
 
 /** One-to-one with a `vet` user; the primary key is the user's id. */
 @Entity('vet_profiles')
 @Index(['verificationStatus'])
 @Index(['city'])
+@Index(['clinicId'])
 export class VetProfile {
   @PrimaryColumn('uuid')
   userId: string;
@@ -58,6 +61,15 @@ export class VetProfile {
   @Column({ type: 'text', array: true, default: () => "'{}'" })
   languages: string[];
 
+  /** The registered clinic the vet works at, if any. */
+  @Column({ type: 'uuid', nullable: true })
+  clinicId: string | null;
+
+  @ManyToOne(() => Clinic, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'clinicId' })
+  clinic: Clinic | null;
+
+  /** Free-text fallbacks for vets whose clinic is not registered. */
   @Column({ type: 'varchar', length: 150, nullable: true })
   clinicName: string | null;
 

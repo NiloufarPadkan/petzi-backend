@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ClinicsModule } from '../clinics/clinics.module';
 import { UsersModule } from '../users/users.module';
 import { AdminVetDocumentsController } from './admin-vet-documents.controller';
 import { AdminVetReviewsController } from './admin-vet-reviews.controller';
@@ -29,6 +30,7 @@ import { VetsService } from './vets.service';
       VetStatusLog,
     ]),
     UsersModule,
+    ClinicsModule,
   ],
   controllers: [
     AdminVetsController,

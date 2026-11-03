@@ -10,6 +10,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -131,6 +132,16 @@ export class CreateVetDto {
   @IsString({ each: true })
   @MaxLength(50, { each: true })
   languages?: string[];
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description:
+      'Registered clinic the vet works at (send null to unlink); when set, its name, phone and address replace the free-text clinic fields',
+  })
+  @IsOptional()
+  @IsUUID()
+  clinicId?: string | null;
 
   @ApiPropertyOptional({ example: 'کلینیک دامپزشکی پت لند' })
   @IsOptional()

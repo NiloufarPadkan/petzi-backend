@@ -17,6 +17,7 @@ import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   User,
 } from '../users/entities/user.entity';
+import { ClinicsService } from '../clinics/clinics.service';
 import { UsersService } from '../users/users.service';
 import { CreateVetDto } from './dto/create-vet.dto';
 import { QueryVetsDto } from './dto/query-vets.dto';
@@ -51,6 +52,7 @@ const PROFILE_FIELDS = [
   'university',
   'graduationYear',
   'languages',
+  'clinicId',
   'clinicName',
   'clinicPhone',
   'clinicAddress',
@@ -73,12 +75,14 @@ export class VetsService {
     private readonly reviewsRepository: Repository<VetReview>,
     private readonly dataSource: DataSource,
     private readonly usersService: UsersService,
+    private readonly clinicsService: ClinicsService,
   ) {}
 
   async findAll(query: QueryVetsDto): Promise<VetListResponseDto> {
     const qb = this.profilesRepository
       .createQueryBuilder('vet')
       .innerJoinAndSelect('vet.user', 'user')
+      .leftJoinAndSelect('vet.clinic', 'clinic')
       .where('user.deletedAt IS NULL');
 
     if (query.search) {
@@ -88,6 +92,9 @@ export class VetsService {
       );
     }
     if (query.city) qb.andWhere('vet.city = :city', { city: query.city });
+    if (query.clinicId) {
+      qb.andWhere('vet.clinicId = :clinicId', { clinicId: query.clinicId });
+    }
     if (query.specialty) {
       qb.andWhere('vet.primarySpecialty = :specialty', {
         specialty: query.specialty,
@@ -139,8 +146,8 @@ export class VetsService {
       university: profile.university,
       graduationYear: profile.graduationYear,
       languages: profile.languages,
-      clinicPhone: profile.clinicPhone,
-      clinicAddress: profile.clinicAddress,
+      clinicPhone: profile.clinic?.phone ?? profile.clinicPhone,
+      clinicAddress: profile.clinic?.address ?? profile.clinicAddress,
       instagram: profile.instagram,
       telegram: profile.telegram,
       linkedin: profile.linkedin,
@@ -172,6 +179,8 @@ export class VetsService {
       email,
       medicalCouncilNumber: dto.medicalCouncilNumber,
     });
+
+    if (dto.clinicId) await this.clinicsService.getClinicOrThrow(dto.clinicId);
 
     let userId: string;
     try {
@@ -238,6 +247,8 @@ export class VetsService {
       },
       id,
     );
+
+    if (dto.clinicId) await this.clinicsService.getClinicOrThrow(dto.clinicId);
 
     const userChanges: Partial<User> = {};
     if (dto.fullName !== undefined) userChanges.fullName = dto.fullName;
@@ -360,7 +371,7 @@ export class VetsService {
   async getVetOrThrow(id: string): Promise<VetProfile> {
     const profile = await this.profilesRepository.findOne({
       where: { userId: id },
-      relations: { user: true },
+      relations: { user: true, clinic: true },
     });
     if (!profile?.user || profile.user.deletedAt) {
       throw new NotFoundException('دامپزشک یافت نشد');
@@ -521,7 +532,8 @@ export class VetsService {
       phoneNumber: user.phoneNumber,
       profilePictureUrl: user.profilePictureUrl,
       primarySpecialty: profile.primarySpecialty,
-      clinicName: profile.clinicName,
+      clinicId: profile.clinicId,
+      clinicName: profile.clinic?.name ?? profile.clinicName,
       city: profile.city,
       medicalCouncilNumber: profile.medicalCouncilNumber,
       verificationStatus: profile.verificationStatus,
