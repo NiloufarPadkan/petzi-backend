@@ -64,8 +64,11 @@ export class User {
   @Column({ type: 'text', nullable: true })
   statusChangeReason: string | null;
 
-  @Column({ type: 'text', nullable: true })
-  adminNotes: string | null;
+  @Column({ default: false })
+  isSuspended: boolean;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lastLoginAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

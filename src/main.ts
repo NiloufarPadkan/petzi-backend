@@ -68,6 +68,9 @@ async function bootstrap() {
   app.useStaticAssets(join(__dirname, '..', 'uploads', 'profile-pictures'), {
     prefix: '/uploads/profile-pictures',
   });
+  app.useStaticAssets(join(__dirname, '..', 'uploads', 'clinic-media'), {
+    prefix: '/uploads/clinic-media',
+  });
 
   if (swaggerEnabled) {
     setupSwagger(app);

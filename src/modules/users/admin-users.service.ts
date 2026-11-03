@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { SubscriptionPlan } from '../../common/enums/subscription-plan.enum';
 import { SubscriptionStatus } from '../../common/enums/subscription-status.enum';
 import { normalizePhoneNumber } from '../../common/validators/is-iranian-phone.validator';
@@ -10,6 +16,7 @@ import { Pet } from '../pets/entities/pet.entity';
 import { Subscription } from '../subscriptions/entities/subscription.entity';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { AdminUserResponseDto } from './dto/admin-user-response.dto';
+import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { QueryAdminUsersDto } from './dto/query-admin-users.dto';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { DEFAULT_NOTIFICATION_PREFERENCES, User } from './entities/user.entity';
@@ -38,7 +45,8 @@ export class AdminUsersService {
   }> {
     const qb = this.usersRepository
       .createQueryBuilder('user')
-      .where('user.deletedAt IS NULL');
+      .where('user.deletedAt IS NULL')
+      .andWhere('user.role = :role', { role: UserRole.USER });
 
     if (query.search) {
       qb.andWhere(
@@ -99,6 +107,65 @@ export class AdminUsersService {
     return item;
   }
 
+  async create(dto: CreateAdminUserDto): Promise<AdminUserResponseDto> {
+    if ((dto.city === undefined) !== (dto.fullAddress === undefined)) {
+      throw new BadRequestException(
+        'شهر و نشانی کامل باید هر دو ارسال شوند یا هیچ‌کدام',
+      );
+    }
+    if (
+      dto.dateOfBirth &&
+      new Date(`${dto.dateOfBirth}T00:00:00.000Z`) > new Date()
+    ) {
+      throw new BadRequestException('تاریخ تولد نمی‌تواند در آینده باشد');
+    }
+
+    const phoneNumber = normalizePhoneNumber(dto.phoneNumber);
+    const email = dto.email?.toLowerCase();
+
+    if (await this.usersService.findByPhone(phoneNumber)) {
+      throw new ConflictException('این شماره موبایل قبلاً ثبت شده است');
+    }
+    if (email && (await this.usersService.findByEmail(email))) {
+      throw new ConflictException('این ایمیل قبلاً ثبت شده است');
+    }
+
+    let user: User;
+    try {
+      user = await this.usersService.create({
+        fullName: dto.fullName,
+        phoneNumber,
+        email,
+        dateOfBirth: dto.dateOfBirth,
+        statusChangeReason: dto.statusChangeReason,
+        notificationPreferences: {
+          ...DEFAULT_NOTIFICATION_PREFERENCES,
+          ...dto.notificationPreferences,
+        },
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException('شماره موبایل یا ایمیل قبلاً ثبت شده است');
+      }
+      throw error;
+    }
+
+    if (dto.city !== undefined && dto.fullAddress !== undefined) {
+      await this.upsertDefaultAddress(user.id, dto.city, dto.fullAddress);
+    }
+    if (
+      dto.subscriptionPlan !== undefined ||
+      dto.subscriptionStatus !== undefined
+    ) {
+      await this.subscriptionsService.updateLatest(user.id, {
+        plan: dto.subscriptionPlan,
+        status: dto.subscriptionStatus,
+      });
+    }
+
+    return this.findOne(user.id);
+  }
+
   async update(
     id: string,
     dto: UpdateAdminUserDto,
@@ -114,7 +181,6 @@ export class AdminUsersService {
       userChanges.dateOfBirth = dto.dateOfBirth;
     if (dto.statusChangeReason !== undefined)
       userChanges.statusChangeReason = dto.statusChangeReason;
-    if (dto.adminNotes !== undefined) userChanges.adminNotes = dto.adminNotes;
     if (dto.notificationPreferences !== undefined) {
       const current = await this.usersService.findById(id);
       userChanges.notificationPreferences = {
@@ -124,7 +190,16 @@ export class AdminUsersService {
       };
     }
     if (Object.keys(userChanges).length > 0) {
-      await this.usersService.update(id, userChanges);
+      try {
+        await this.usersService.update(id, userChanges);
+      } catch (error) {
+        if (this.isUniqueConstraintError(error)) {
+          throw new ConflictException(
+            'شماره موبایل یا ایمیل قبلاً ثبت شده است',
+          );
+        }
+        throw error;
+      }
     }
 
     if (dto.city !== undefined || dto.fullAddress !== undefined) {
@@ -229,10 +304,16 @@ export class AdminUsersService {
 
   private async getUserOrThrow(id: string): Promise<User> {
     const user = await this.usersService.findById(id);
-    if (!user) {
+    if (!user || user.role !== UserRole.USER) {
       throw new NotFoundException('کاربر یافت نشد');
     }
     return user;
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) return false;
+    const driverError = error.driverError as { code?: string };
+    return driverError.code === '23505';
   }
 
   private async toResponseList(users: User[]): Promise<AdminUserResponseDto[]> {
@@ -282,7 +363,6 @@ export class AdminUsersService {
         notificationPreferences:
           user.notificationPreferences ?? DEFAULT_NOTIFICATION_PREFERENCES,
         statusChangeReason: user.statusChangeReason,
-        adminNotes: user.adminNotes,
         createdAt: user.createdAt,
       };
     });

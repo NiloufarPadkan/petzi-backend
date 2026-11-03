@@ -27,6 +27,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!user) {
       throw new UnauthorizedException('کاربر این توکن دیگر وجود ندارد');
     }
+    if (user.isSuspended) {
+      throw new UnauthorizedException('حساب کاربری شما تعلیق شده است');
+    }
     return { ...payload, role: user.role };
   }
 }

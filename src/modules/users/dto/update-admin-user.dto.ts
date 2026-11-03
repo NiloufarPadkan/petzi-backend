@@ -97,15 +97,6 @@ export class UpdateAdminUserDto {
   @MaxLength(1000)
   statusChangeReason?: string;
 
-  @ApiPropertyOptional({
-    description: 'یادداشت داخلی مدیریت (غیر قابل نمایش برای کاربر)',
-  })
-  @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(2000)
-  adminNotes?: string;
-
   @ApiPropertyOptional({ type: NotificationPreferencesDto })
   @IsOptional()
   @ValidateNested()

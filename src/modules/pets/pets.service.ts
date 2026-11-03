@@ -9,7 +9,9 @@ import { Repository } from 'typeorm';
 import { PetStatus } from '../../common/enums/pet-status.enum';
 import { ApproximateAge } from '../../common/enums/approximate-age.enum';
 import { PetType } from '../../common/enums/pet-type.enum';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { removeUploadUrls } from '../../common/utils/upload-cleanup';
+import { User } from '../users/entities/user.entity';
 import { AddVaccineDto } from './dto/add-vaccine.dto';
 import { UpdatePetDto, validateAgeFields } from './dto/update-pet.dto';
 import { Pet } from './entities/pet.entity';
@@ -45,6 +47,8 @@ export class PetsService {
     private readonly vaccinesRepository: Repository<PetVaccine>,
     @InjectRepository(PetDocument)
     private readonly documentsRepository: Repository<PetDocument>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
   ) {}
 
   async createDraft(ownerId: string, dto?: UpdatePetDto) {
@@ -80,7 +84,12 @@ export class PetsService {
     return this.formatPetResponse(pet);
   }
 
-  async update(ownerId: string, petId: string, dto: UpdatePetDto) {
+  async update(
+    ownerId: string,
+    petId: string,
+    dto: UpdatePetDto,
+    { allowActive = false }: { allowActive?: boolean } = {},
+  ) {
     const ageError = validateAgeFields(dto);
     if (ageError) throw new BadRequestException(ageError);
     if (Object.values(dto).some((value) => value === null)) {
@@ -97,7 +106,11 @@ export class PetsService {
       );
     }
 
-    await this.getEditablePet(ownerId, petId);
+    if (allowActive) {
+      await this.getOwnedPet(ownerId, petId);
+    } else {
+      await this.getEditablePet(ownerId, petId);
+    }
     const changes: Partial<Pet> = {};
 
     if (dto.birthDate !== undefined) {
@@ -151,11 +164,15 @@ export class PetsService {
     }
 
     const result = await this.petsRepository.update(
-      { id: petId, ownerId, status: PetStatus.DRAFT },
+      {
+        id: petId,
+        ownerId,
+        ...(allowActive ? {} : { status: PetStatus.DRAFT }),
+      },
       changes,
     );
     if (result.affected !== 1) {
-      await this.getEditablePet(ownerId, petId);
+      if (!allowActive) await this.getEditablePet(ownerId, petId);
       throw new BadRequestException('اطلاعات حیوان خانگی به‌روزرسانی نشد');
     }
     const withRelations = await this.getOwnedPet(ownerId, petId, true);
@@ -285,6 +302,58 @@ export class PetsService {
     if (pet.status !== PetStatus.DRAFT) {
       throw new BadRequestException('فقط پیش‌نویس‌ها قابل حذف هستند');
     }
+    await this.removePet(pet);
+    return { message: 'پیش‌نویس حذف شد' };
+  }
+
+  async adminFindAll(userId: string, status?: PetStatus) {
+    await this.assertPetOwnerExists(userId);
+    const pets = await this.findAllByOwner(userId, status);
+    return pets.map((pet) => this.withAdminDocumentUrls(userId, pet));
+  }
+
+  async adminFindOne(userId: string, petId: string) {
+    await this.assertPetOwnerExists(userId);
+    const pet = await this.findOneByOwner(userId, petId);
+    return this.withAdminDocumentUrls(userId, pet);
+  }
+
+  async adminCreate(userId: string, dto: UpdatePetDto) {
+    await this.assertPetOwnerExists(userId);
+    const draft = await this.createDraft(userId, dto);
+    try {
+      const { pet } = await this.submit(userId, draft.id);
+      return this.withAdminDocumentUrls(userId, pet);
+    } catch (error) {
+      await this.petsRepository.delete({ id: draft.id, ownerId: userId });
+      throw error;
+    }
+  }
+
+  async adminUpdate(userId: string, petId: string, dto: UpdatePetDto) {
+    await this.assertPetOwnerExists(userId);
+    const result = await this.update(userId, petId, dto, {
+      allowActive: true,
+    });
+    return {
+      message: result.message,
+      pet: this.withAdminDocumentUrls(userId, result.pet),
+    };
+  }
+
+  async adminRemove(userId: string, petId: string) {
+    await this.assertPetOwnerExists(userId);
+    const pet = await this.getOwnedPet(userId, petId, true);
+    await this.removePet(pet);
+    return { message: 'حیوان خانگی حذف شد' };
+  }
+
+  async adminGetDocument(userId: string, petId: string, documentId: string) {
+    await this.assertPetOwnerExists(userId);
+    return this.getDocument(userId, petId, documentId);
+  }
+
+  private async removePet(pet: Pet) {
     await this.petsRepository.remove(pet);
     try {
       await removeUploadUrls(
@@ -292,11 +361,31 @@ export class PetsService {
       );
     } catch (error) {
       this.logger.warn(
-        `Draft ${petId} was deleted but one or more files could not be removed`,
+        `Pet ${pet.id} was deleted but one or more files could not be removed`,
         error instanceof Error ? error.stack : undefined,
       );
     }
-    return { message: 'پیش‌نویس حذف شد' };
+  }
+
+  private async assertPetOwnerExists(userId: string) {
+    const exists = await this.usersRepository.exists({
+      where: { id: userId, role: UserRole.USER },
+    });
+    if (!exists) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+  }
+
+  private withAdminDocumentUrls<
+    T extends { id: string; documents?: { id: string; fileUrl: string }[] },
+  >(userId: string, pet: T): T {
+    return {
+      ...pet,
+      documents: pet.documents?.map((document) => ({
+        ...document,
+        fileUrl: `/api/v1/admin/users/${userId}/pets/${pet.id}/documents/${document.id}/download`,
+      })),
+    };
   }
 
   private async getOwnedPet(
