@@ -27,6 +27,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiConsumes,
+  ApiCreatedResponse,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
@@ -39,7 +40,11 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/auth.guards';
 import { AdminUsersService } from './admin-users.service';
-import { AdminUsersListResponseDto } from './dto/admin-user-response.dto';
+import {
+  AdminUserResponseDto,
+  AdminUsersListResponseDto,
+} from './dto/admin-user-response.dto';
+import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { QueryAdminUsersDto } from './dto/query-admin-users.dto';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 
@@ -76,6 +81,13 @@ export class UsersController {
   @ApiOkResponse({ type: AdminUsersListResponseDto })
   findAll(@Query() query: QueryAdminUsersDto) {
     return this.adminUsersService.findAll(query);
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Create a pet-owner user' })
+  @ApiCreatedResponse({ type: AdminUserResponseDto })
+  create(@Body() dto: CreateAdminUserDto) {
+    return this.adminUsersService.create(dto);
   }
 
   @Get('export')

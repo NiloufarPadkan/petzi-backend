@@ -20,6 +20,14 @@ import { PetVaccine } from './modules/pets/entities/pet-vaccine.entity';
 import { PetDocument } from './modules/pets/entities/pet-document.entity';
 import { Address } from './modules/addresses/entities/address.entity';
 import { Subscription } from './modules/subscriptions/entities/subscription.entity';
+import { UserNote } from './modules/users/entities/user-note.entity';
+import { VetsModule } from './modules/vets/vets.module';
+import { VetProfile } from './modules/vets/entities/vet-profile.entity';
+import { VetDocument } from './modules/vets/entities/vet-document.entity';
+import { VetClinicService } from './modules/vets/entities/vet-clinic-service.entity';
+import { VetWorkingHour } from './modules/vets/entities/vet-working-hour.entity';
+import { VetReview } from './modules/vets/entities/vet-review.entity';
+import { VetStatusLog } from './modules/vets/entities/vet-status-log.entity';
 
 @Module({
   imports: [
@@ -46,6 +54,13 @@ import { Subscription } from './modules/subscriptions/entities/subscription.enti
           PetDocument,
           Address,
           Subscription,
+          UserNote,
+          VetProfile,
+          VetDocument,
+          VetClinicService,
+          VetWorkingHour,
+          VetReview,
+          VetStatusLog,
         ],
         synchronize: configService.get<boolean>('database.synchronize'),
         logging: configService.get<string>('nodeEnv') === 'development',
@@ -62,6 +77,7 @@ import { Subscription } from './modules/subscriptions/entities/subscription.enti
     AddressesModule,
     UsersModule,
     SubscriptionsModule,
+    VetsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -8,6 +8,13 @@ import { PetVaccine } from '../modules/pets/entities/pet-vaccine.entity';
 import { PetDocument } from '../modules/pets/entities/pet-document.entity';
 import { Address } from '../modules/addresses/entities/address.entity';
 import { Subscription } from '../modules/subscriptions/entities/subscription.entity';
+import { UserNote } from '../modules/users/entities/user-note.entity';
+import { VetProfile } from '../modules/vets/entities/vet-profile.entity';
+import { VetDocument } from '../modules/vets/entities/vet-document.entity';
+import { VetClinicService } from '../modules/vets/entities/vet-clinic-service.entity';
+import { VetWorkingHour } from '../modules/vets/entities/vet-working-hour.entity';
+import { VetReview } from '../modules/vets/entities/vet-review.entity';
+import { VetStatusLog } from '../modules/vets/entities/vet-status-log.entity';
 
 const migrationsExtension = __filename.endsWith('.ts') ? 'ts' : 'js';
 
@@ -18,7 +25,22 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME ?? 'postgres',
   password: process.env.DB_PASSWORD ?? 'postgres',
   database: process.env.DB_DATABASE ?? 'petzi',
-  entities: [User, Otp, Pet, PetVaccine, PetDocument, Address, Subscription],
+  entities: [
+    User,
+    Otp,
+    Pet,
+    PetVaccine,
+    PetDocument,
+    Address,
+    Subscription,
+    UserNote,
+    VetProfile,
+    VetDocument,
+    VetClinicService,
+    VetWorkingHour,
+    VetReview,
+    VetStatusLog,
+  ],
   migrations: [join(__dirname, '..', 'migrations', `*.${migrationsExtension}`)],
   synchronize: false,
 });

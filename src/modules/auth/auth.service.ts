@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -351,7 +352,12 @@ export class AuthService {
     });
   }
 
-  private buildAuthResponse(user: User, message: string) {
+  private async buildAuthResponse(user: User, message: string) {
+    if (user.isSuspended) {
+      throw new ForbiddenException('حساب کاربری شما تعلیق شده است');
+    }
+    await this.usersService.update(user.id, { lastLoginAt: new Date() });
+
     const accessToken = this.signToken(
       { sub: user.id, role: user.role, type: 'access' },
       this.configService.get<string>('jwt.expiresIn')!,

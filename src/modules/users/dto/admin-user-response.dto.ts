@@ -46,9 +46,6 @@ export class AdminUserResponseDto {
   @ApiProperty({ nullable: true })
   statusChangeReason: string | null;
 
-  @ApiProperty({ nullable: true })
-  adminNotes: string | null;
-
   @ApiProperty()
   createdAt: Date;
 }
