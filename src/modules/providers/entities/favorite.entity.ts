@@ -31,7 +31,7 @@ export class FavoriteProvider {
   })
   providerType: FavoriteType;
 
-  @Column()
+  @Column({ type: 'uuid' })
   providerId: string;
 
   @CreateDateColumn()
