@@ -46,6 +46,6 @@ import { Clinic } from './entities/clinic.entity';
     ClinicImagesService,
     ClinicReviewsService,
   ],
-  exports: [ClinicsService],
+  exports: [ClinicsService, ClinicServicesService, ClinicWorkingHoursService],
 })
 export class ClinicsModule {}

@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import {
+  IsDateString,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class AddVaccineDto {
   @ApiProperty({
@@ -17,4 +23,19 @@ export class AddVaccineDto {
   })
   @IsDateString({}, { message: 'تاریخ واکسن معتبر نیست' })
   vaccineDate: string;
+
+  @ApiProperty({
+    required: false,
+    example: '2025-06-01',
+    description: 'When the next dose is due (drives reminders)',
+  })
+  @IsOptional()
+  @IsDateString({}, { message: 'تاریخ نوبت بعدی معتبر نیست' })
+  nextDueDate?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
 }

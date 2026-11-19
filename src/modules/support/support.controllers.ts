@@ -20,6 +20,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AdminOnly } from '../../common/decorators/admin-only.decorator';
+import { SettingsGroup } from '../../common/enums/admin-panel.enums';
 import { JwtAuthGuard } from '../auth/guards/auth.guards';
 import type { AuthenticatedRequest } from '../auth/interfaces/auth.interface';
 import {
@@ -30,6 +31,7 @@ import {
   UpdateFaqDto,
   UpdateTicketDto,
 } from './dto/support.dto';
+import { SettingsService } from '../settings/settings.service';
 import { SupportService } from './support.service';
 
 @ApiTags('Admin Support')
@@ -101,7 +103,28 @@ export class AdminFaqController {
 @ApiTags('Support')
 @Controller('support')
 export class PublicSupportController {
-  constructor(private readonly supportService: SupportService) {}
+  constructor(
+    private readonly supportService: SupportService,
+    private readonly settingsService: SettingsService,
+  ) {}
+
+  @Get('pages')
+  @ApiOperation({
+    summary: 'Terms, privacy policy, about text and support contact (public)',
+  })
+  async pages() {
+    const general = await this.settingsService.getGroup(SettingsGroup.GENERAL);
+    return {
+      terms: general['termsText'],
+      privacy: general['privacyText'],
+      about: general['aboutText'],
+      contact: {
+        phone: general['supportPhone'],
+        email: general['supportEmail'],
+        hours: general['supportHours'],
+      },
+    };
+  }
 
   @Get('faq')
   @ApiOperation({ summary: 'Published FAQ entries (public)' })

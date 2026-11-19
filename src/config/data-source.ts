@@ -33,6 +33,21 @@ import { ReservationNote } from '../modules/reservations/entities/reservation-no
 import { ReservationEvent } from '../modules/reservations/entities/reservation-event.entity';
 import { Payment } from '../modules/payments/entities/payment.entity';
 import { Organization } from '../modules/organizations/entities/organization.entity';
+import { ClinicRole } from '../modules/clinic-panel/entities/clinic-role.entity';
+import { ClinicMember } from '../modules/clinic-panel/entities/clinic-member.entity';
+import { ClinicPatient } from '../modules/clinic-panel/entities/clinic-patient.entity';
+import { PatientRecord } from '../modules/clinic-panel/entities/patient-record.entity';
+import { FavoriteProvider } from '../modules/providers/entities/favorite.entity';
+import {
+  PetWeight,
+  PetEvent,
+  PetMedication,
+  PetSurgery,
+} from '../modules/pet-health/entities/pet-health.entities';
+import {
+  Notification,
+  DeviceToken,
+} from '../modules/notifications/entities/notification.entities';
 
 const migrationsExtension = __filename.endsWith('.ts') ? 'ts' : 'js';
 
@@ -76,6 +91,17 @@ export const AppDataSource = new DataSource({
     ReservationEvent,
     Payment,
     Organization,
+    ClinicRole,
+    ClinicMember,
+    ClinicPatient,
+    PatientRecord,
+    FavoriteProvider,
+    PetWeight,
+    PetEvent,
+    PetMedication,
+    PetSurgery,
+    Notification,
+    DeviceToken,
   ],
   migrations: [join(__dirname, '..', 'migrations', `*.${migrationsExtension}`)],
   synchronize: false,

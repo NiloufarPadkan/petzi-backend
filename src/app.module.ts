@@ -47,6 +47,28 @@ import { ReservationNote } from './modules/reservations/entities/reservation-not
 import { ReservationEvent } from './modules/reservations/entities/reservation-event.entity';
 import { Payment } from './modules/payments/entities/payment.entity';
 import { Organization } from './modules/organizations/entities/organization.entity';
+import { ClinicRole } from './modules/clinic-panel/entities/clinic-role.entity';
+import { ClinicMember } from './modules/clinic-panel/entities/clinic-member.entity';
+import { ClinicPatient } from './modules/clinic-panel/entities/clinic-patient.entity';
+import { PatientRecord } from './modules/clinic-panel/entities/patient-record.entity';
+import { FavoriteProvider } from './modules/providers/entities/favorite.entity';
+import {
+  PetWeight,
+  PetEvent,
+  PetMedication,
+  PetSurgery,
+} from './modules/pet-health/entities/pet-health.entities';
+import {
+  Notification,
+  DeviceToken,
+} from './modules/notifications/entities/notification.entities';
+import { ProvidersModule } from './modules/providers/providers.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
+import { PetHealthModule } from './modules/pet-health/pet-health.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { PremiumModule } from './modules/premium/premium.module';
+import { HomeModule } from './modules/home/home.module';
+import { ClinicPanelModule } from './modules/clinic-panel/clinic-panel.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { SupportModule } from './modules/support/support.module';
@@ -106,6 +128,17 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
           ReservationEvent,
           Payment,
           Organization,
+          ClinicRole,
+          ClinicMember,
+          ClinicPatient,
+          PatientRecord,
+          FavoriteProvider,
+          PetWeight,
+          PetEvent,
+          PetMedication,
+          PetSurgery,
+          Notification,
+          DeviceToken,
         ],
         synchronize: configService.get<boolean>('database.synchronize'),
         logging: configService.get<string>('nodeEnv') === 'development',
@@ -132,6 +165,13 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     PaymentsModule,
     OrganizationsModule,
     DashboardModule,
+    ClinicPanelModule,
+    ProvidersModule,
+    BookingsModule,
+    PetHealthModule,
+    NotificationsModule,
+    PremiumModule,
+    HomeModule,
   ],
   controllers: [AppController],
   providers: [

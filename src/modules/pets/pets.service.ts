@@ -184,7 +184,7 @@ export class PetsService {
   }
 
   async addVaccine(ownerId: string, petId: string, dto: AddVaccineDto) {
-    await this.getEditablePet(ownerId, petId);
+    await this.getOwnedPet(ownerId, petId);
     if (this.isFutureDate(dto.vaccineDate)) {
       throw new BadRequestException(
         'تاریخ تزریق واکسن نمی‌تواند در آینده باشد',
@@ -194,6 +194,8 @@ export class PetsService {
       petId,
       vaccineName: dto.vaccineType,
       vaccineDate: dto.vaccineDate,
+      nextDueDate: dto.nextDueDate ?? null,
+      notes: dto.notes ?? null,
     });
     const saved = await this.vaccinesRepository.save(vaccine);
     return {
@@ -211,7 +213,7 @@ export class PetsService {
     petId: string,
     files: Express.Multer.File[],
   ) {
-    await this.getEditablePet(ownerId, petId);
+    await this.getOwnedPet(ownerId, petId);
 
     if (!files?.length) {
       throw new BadRequestException('حداقل یک فایل باید ارسال شود');

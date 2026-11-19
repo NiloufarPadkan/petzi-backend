@@ -51,6 +51,10 @@ export class Payment {
   @Column({ type: 'uuid', nullable: true })
   planId: string | null;
 
+  /** Subscription length bought by this payment. */
+  @Column({ type: 'int', nullable: true })
+  planMonths: number | null;
+
   @Column({
     type: 'enum',
     enum: PaymentPurpose,

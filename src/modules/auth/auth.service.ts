@@ -463,7 +463,7 @@ export class AuthService {
     return false;
   }
 
-  private async consumeRegistrationToken(
+  async consumeRegistrationToken(
     registrationToken: string,
     expectedPhone: string,
   ): Promise<void> {
@@ -527,7 +527,7 @@ export class AuthService {
     });
   }
 
-  private async buildAuthResponse(user: User, message: string) {
+  async buildAuthResponse(user: User, message: string) {
     if (user.isSuspended) {
       throw new ForbiddenException('حساب کاربری شما تعلیق شده است');
     }

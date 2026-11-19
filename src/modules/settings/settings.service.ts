@@ -17,6 +17,7 @@ interface GatewayConfig {
 }
 
 const MAX_STRING_LENGTH = 500;
+const MAX_LONG_TEXT_LENGTH = 50_000;
 const MAX_GATEWAYS = 20;
 
 @Injectable()
@@ -132,8 +133,16 @@ export class SettingsService {
         }
         return value;
       case 'string':
-        if (typeof value !== 'string' || value.length > MAX_STRING_LENGTH) {
-          this.invalid(key, 'باید متن کوتاه‌تر از ۵۰۰ کاراکتر باشد');
+        if (
+          typeof value !== 'string' ||
+          value.length > (field.long ? MAX_LONG_TEXT_LENGTH : MAX_STRING_LENGTH)
+        ) {
+          this.invalid(
+            key,
+            field.long
+              ? 'متن بیش از حد طولانی است'
+              : 'باید متن کوتاه‌تر از ۵۰۰ کاراکتر باشد',
+          );
         }
         if (key === 'webhookUrl' && value && !/^https?:\/\//i.test(value)) {
           this.invalid(key, 'باید با http:// یا https:// شروع شود');

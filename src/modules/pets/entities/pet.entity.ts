@@ -115,6 +115,9 @@ export class Pet {
   @Column({ type: 'text', nullable: true })
   additionalNotes: string;
 
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  microchipNumber: string | null;
+
   @OneToMany(() => PetVaccine, (vaccine) => vaccine.pet, { cascade: true })
   vaccines: PetVaccine[];
 

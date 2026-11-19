@@ -47,7 +47,16 @@ export default () => ({
   sms: {
     provider: process.env.SMS_PROVIDER ?? 'mock',
   },
+  reminders: {
+    enabled: process.env.REMINDERS_ENABLED !== 'false' && nodeEnv !== 'test',
+    intervalMinutes: parseInt(
+      process.env.REMINDERS_INTERVAL_MINUTES ?? '60',
+      10,
+    ),
+  },
   appUrl: process.env.APP_URL ?? 'http://localhost:3000',
+  /** Public website base used to build shareable provider links. */
+  publicSiteUrl: process.env.PUBLIC_SITE_URL ?? '',
   cors: {
     origins: (process.env.CORS_ORIGINS ?? 'http://localhost:3000')
       .split(',')

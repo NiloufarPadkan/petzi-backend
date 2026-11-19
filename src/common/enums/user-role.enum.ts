@@ -5,4 +5,6 @@ export enum UserRole {
   CLINIC = 'clinic',
   PETSHOP = 'petshop',
   SHELTER = 'shelter',
+  /** Clinic employees who are not vets (secretary, technician, ...). */
+  CLINIC_STAFF = 'clinic_staff',
 }

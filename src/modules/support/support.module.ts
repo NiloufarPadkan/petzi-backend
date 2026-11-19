@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { SettingsModule } from '../settings/settings.module';
 import { FaqItem } from './entities/faq-item.entity';
 import { SupportTicket } from './entities/support-ticket.entity';
 import {
@@ -10,7 +11,7 @@ import {
 import { SupportService } from './support.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([SupportTicket, FaqItem])],
+  imports: [TypeOrmModule.forFeature([SupportTicket, FaqItem]), SettingsModule],
   controllers: [
     AdminTicketsController,
     AdminFaqController,

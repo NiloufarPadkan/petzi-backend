@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Clinic } from '../clinics/entities/clinic.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { Pet } from '../pets/entities/pet.entity';
 import { User } from '../users/entities/user.entity';
 import { AdminReservationsController } from './admin-reservations.controller';
@@ -19,6 +20,7 @@ import { ReservationsService } from './reservations.service';
       Pet,
       Clinic,
     ]),
+    NotificationsModule,
   ],
   controllers: [AdminReservationsController],
   providers: [ReservationsService],

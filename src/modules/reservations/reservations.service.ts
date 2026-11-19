@@ -13,6 +13,8 @@ import {
 } from '../../common/enums/admin-panel.enums';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { Clinic } from '../clinics/entities/clinic.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../../common/enums/owner-app.enums';
 import { Payment } from '../payments/entities/payment.entity';
 import { Pet } from '../pets/entities/pet.entity';
 import { User } from '../users/entities/user.entity';
@@ -38,6 +40,13 @@ const STATUS_LABELS: Record<ReservationStatus, string> = {
   [ReservationStatus.CANCELLED]: 'لغو شده',
   [ReservationStatus.NO_SHOW]: 'عدم مراجعه',
 };
+
+/** Admin filters plus options used by the clinic panel. */
+export interface ReservationSearch extends QueryReservationsDto {
+  fromAt?: Date;
+  toAt?: Date;
+  sort?: 'asc' | 'desc';
+}
 
 export const reservationCode = (number: number) => `BK-${number}`;
 
@@ -79,10 +88,11 @@ export class ReservationsService {
     @InjectRepository(Clinic)
     private readonly clinicsRepository: Repository<Clinic>,
     private readonly dataSource: DataSource,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async findAll(
-    query: QueryReservationsDto,
+    query: ReservationSearch,
   ): Promise<Paginated<ReservationListItem>> {
     const qb = this.baseQuery();
 
@@ -101,12 +111,15 @@ export class ReservationsService {
     ] as const) {
       if (query[key]) qb.andWhere(`r.${key} = :${key}`, { [key]: query[key] });
     }
+    if (query.fromAt)
+      qb.andWhere('r.scheduledAt >= :fromAt', { fromAt: query.fromAt });
+    if (query.toAt) qb.andWhere('r.scheduledAt < :toAt', { toAt: query.toAt });
     if (query.from) qb.andWhere('r.scheduledAt >= :from', { from: query.from });
     if (query.to)
       qb.andWhere('r.scheduledAt < :to::date + 1', { to: query.to });
 
     const [reservations, total] = await qb
-      .orderBy('r.scheduledAt', 'DESC')
+      .orderBy('r.scheduledAt', query.sort === 'asc' ? 'ASC' : 'DESC')
       .skip((query.page - 1) * query.limit)
       .take(query.limit)
       .getManyAndCount();
@@ -313,6 +326,11 @@ export class ReservationsService {
       durationMinutes,
     });
     await this.addEvent(id, 'rescheduled', 'زمان رزرو تغییر کرد', actorId);
+    await this.notifyOwner(
+      reservation,
+      'تغییر زمان نوبت',
+      `زمان نوبت «${reservation.serviceName}» شما تغییر کرد.`,
+    );
     return this.findOne(id);
   }
 
@@ -342,6 +360,13 @@ export class ReservationsService {
         `وضعیت رزرو به «${STATUS_LABELS[status]}» تغییر کرد`,
         actorId,
       );
+      await this.notifyOwner(
+        reservation,
+        'تغییر وضعیت نوبت',
+        status === ReservationStatus.COMPLETED
+          ? `نوبت «${reservation.serviceName}» انجام شد؛ نظر خود را ثبت کنید.`
+          : `نوبت «${reservation.serviceName}» ${STATUS_LABELS[status]} شد.`,
+      );
     }
     return this.findOne(id);
   }
@@ -357,6 +382,11 @@ export class ReservationsService {
       cancelledAt: new Date(),
     });
     await this.addEvent(id, 'cancelled', `رزرو لغو شد: ${reason}`, actorId);
+    await this.notifyOwner(
+      reservation,
+      'لغو نوبت',
+      `نوبت «${reservation.serviceName}» لغو شد: ${reason}`,
+    );
     return this.findOne(id);
   }
 
@@ -381,6 +411,15 @@ export class ReservationsService {
   }
 
   // ---- helpers ----
+
+  private notifyOwner(reservation: Reservation, title: string, body: string) {
+    return this.notificationsService.notify(reservation.ownerId, {
+      type: NotificationType.RESERVATION,
+      title,
+      body,
+      data: { reservationId: reservation.id },
+    });
+  }
 
   private baseQuery() {
     return this.reservationsRepository

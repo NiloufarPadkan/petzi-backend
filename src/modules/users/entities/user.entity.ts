@@ -12,6 +12,12 @@ export interface NotificationPreferences {
   newsletter: boolean;
   reservationAlerts: boolean;
   messageAlerts: boolean;
+  /** Pet-owner app switches; a missing key counts as enabled. */
+  vaccineReminders?: boolean;
+  medicationReminders?: boolean;
+  checkupReminders?: boolean;
+  paymentAlerts?: boolean;
+  discountAlerts?: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {

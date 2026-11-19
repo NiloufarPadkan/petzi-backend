@@ -7,6 +7,8 @@ export interface SettingField {
   default: unknown;
   /** Secrets are masked on read and ignored on write when sent back masked. */
   secret?: boolean;
+  /** Long free text (legal pages) instead of a short line. */
+  long?: boolean;
 }
 
 const bool = (value: boolean): SettingField => ({
@@ -17,6 +19,11 @@ const str = (value: string, secret = false): SettingField => ({
   type: 'string',
   default: value,
   secret,
+});
+const longText = (value: string): SettingField => ({
+  type: 'string',
+  default: value,
+  long: true,
 });
 const num = (value: number): SettingField => ({
   type: 'number',
@@ -40,6 +47,9 @@ export const SETTINGS_SCHEMA: Record<
     supportPhone: str(''),
     supportEmail: str(''),
     supportHours: str(''),
+    termsText: longText(''),
+    privacyText: longText(''),
+    aboutText: longText(''),
   },
   [SettingsGroup.SECURITY]: {
     lockAfterFailedAttempts: bool(true),
