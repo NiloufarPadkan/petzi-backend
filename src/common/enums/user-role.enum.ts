@@ -3,4 +3,6 @@ export enum UserRole {
   ADMIN = 'admin',
   VET = 'vet',
   CLINIC = 'clinic',
+  PETSHOP = 'petshop',
+  SHELTER = 'shelter',
 }

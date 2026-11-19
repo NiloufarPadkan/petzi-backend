@@ -26,4 +26,19 @@ export class SmsService {
     this.logger.error(`SMS provider "${provider}" is not implemented`);
     throw new ServiceUnavailableException('سرویس پیامک در دسترس نیست');
   }
+
+  sendText(phoneNumber: string, message: string): Promise<void> {
+    const provider = this.configService.get<string>('sms.provider');
+
+    if (provider === 'mock') {
+      if (this.configService.get<string>('nodeEnv') === 'production') {
+        throw new ServiceUnavailableException('سرویس پیامک پیکربندی نشده است');
+      }
+      this.logger.log(`[MOCK SMS] "${message}" sent to ${phoneNumber}`);
+      return Promise.resolve();
+    }
+
+    this.logger.error(`SMS provider "${provider}" is not implemented`);
+    throw new ServiceUnavailableException('سرویس پیامک در دسترس نیست');
+  }
 }
