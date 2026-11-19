@@ -12,6 +12,12 @@ export interface NotificationPreferences {
   newsletter: boolean;
   reservationAlerts: boolean;
   messageAlerts: boolean;
+  /** Pet-owner app switches; a missing key counts as enabled. */
+  vaccineReminders?: boolean;
+  medicationReminders?: boolean;
+  checkupReminders?: boolean;
+  paymentAlerts?: boolean;
+  discountAlerts?: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -69,6 +75,9 @@ export class User {
 
   @Column({ type: 'timestamptz', nullable: true })
   lastLoginAt: Date | null;
+
+  @Column({ type: 'int', default: 0 })
+  tokenVersion: number;
 
   @CreateDateColumn()
   createdAt: Date;

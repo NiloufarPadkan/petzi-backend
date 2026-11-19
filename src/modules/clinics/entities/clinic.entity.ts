@@ -131,6 +131,10 @@ export class Clinic {
   })
   activityStatus: ClinicActivityStatus;
 
+  /** Clinic-panel notification switches; see DEFAULT_PANEL_NOTIFICATIONS. */
+  @Column({ type: 'jsonb', default: () => "'{}'" })
+  panelNotifications: Record<string, boolean>;
+
   @Column({ type: 'text', nullable: true })
   adminNotes: string | null;
 

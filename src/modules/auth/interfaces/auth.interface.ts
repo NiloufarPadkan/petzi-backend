@@ -6,6 +6,7 @@ export interface JwtPayload {
   phoneNumber?: string;
   role: UserRole;
   type: 'access';
+  tokenVersion: number;
 }
 
 export interface AuthenticatedRequest extends Request {

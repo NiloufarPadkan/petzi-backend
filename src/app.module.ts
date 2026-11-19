@@ -36,6 +36,47 @@ import { VetWorkingHour } from './modules/vets/entities/vet-working-hour.entity'
 import { VetReview } from './modules/vets/entities/vet-review.entity';
 import { VetStatusLog } from './modules/vets/entities/vet-status-log.entity';
 import { OneTimeToken } from './modules/auth/entities/one-time-token.entity';
+import { PremiumPlan } from './modules/plans/entities/premium-plan.entity';
+import { SystemSetting } from './modules/settings/entities/system-setting.entity';
+import { SupportTicket } from './modules/support/entities/support-ticket.entity';
+import { FaqItem } from './modules/support/entities/faq-item.entity';
+import { Conversation } from './modules/messages/entities/conversation.entity';
+import { ChatMessage } from './modules/messages/entities/chat-message.entity';
+import { Reservation } from './modules/reservations/entities/reservation.entity';
+import { ReservationNote } from './modules/reservations/entities/reservation-note.entity';
+import { ReservationEvent } from './modules/reservations/entities/reservation-event.entity';
+import { Payment } from './modules/payments/entities/payment.entity';
+import { Organization } from './modules/organizations/entities/organization.entity';
+import { ClinicRole } from './modules/clinic-panel/entities/clinic-role.entity';
+import { ClinicMember } from './modules/clinic-panel/entities/clinic-member.entity';
+import { ClinicPatient } from './modules/clinic-panel/entities/clinic-patient.entity';
+import { PatientRecord } from './modules/clinic-panel/entities/patient-record.entity';
+import { FavoriteProvider } from './modules/providers/entities/favorite.entity';
+import {
+  PetWeight,
+  PetEvent,
+  PetMedication,
+  PetSurgery,
+} from './modules/pet-health/entities/pet-health.entities';
+import {
+  Notification,
+  DeviceToken,
+} from './modules/notifications/entities/notification.entities';
+import { ProvidersModule } from './modules/providers/providers.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
+import { PetHealthModule } from './modules/pet-health/pet-health.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { PremiumModule } from './modules/premium/premium.module';
+import { HomeModule } from './modules/home/home.module';
+import { ClinicPanelModule } from './modules/clinic-panel/clinic-panel.module';
+import { PlansModule } from './modules/plans/plans.module';
+import { SettingsModule } from './modules/settings/settings.module';
+import { SupportModule } from './modules/support/support.module';
+import { MessagesModule } from './modules/messages/messages.module';
+import { ReservationsModule } from './modules/reservations/reservations.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -76,6 +117,28 @@ import { OneTimeToken } from './modules/auth/entities/one-time-token.entity';
           ClinicReview,
           ClinicLog,
           OneTimeToken,
+          PremiumPlan,
+          SystemSetting,
+          SupportTicket,
+          FaqItem,
+          Conversation,
+          ChatMessage,
+          Reservation,
+          ReservationNote,
+          ReservationEvent,
+          Payment,
+          Organization,
+          ClinicRole,
+          ClinicMember,
+          ClinicPatient,
+          PatientRecord,
+          FavoriteProvider,
+          PetWeight,
+          PetEvent,
+          PetMedication,
+          PetSurgery,
+          Notification,
+          DeviceToken,
         ],
         synchronize: configService.get<boolean>('database.synchronize'),
         logging: configService.get<string>('nodeEnv') === 'development',
@@ -94,6 +157,21 @@ import { OneTimeToken } from './modules/auth/entities/one-time-token.entity';
     SubscriptionsModule,
     VetsModule,
     ClinicsModule,
+    PlansModule,
+    SettingsModule,
+    SupportModule,
+    MessagesModule,
+    ReservationsModule,
+    PaymentsModule,
+    OrganizationsModule,
+    DashboardModule,
+    ClinicPanelModule,
+    ProvidersModule,
+    BookingsModule,
+    PetHealthModule,
+    NotificationsModule,
+    PremiumModule,
+    HomeModule,
   ],
   controllers: [AppController],
   providers: [

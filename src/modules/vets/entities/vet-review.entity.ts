@@ -32,6 +32,10 @@ export class VetReview {
   @JoinColumn({ name: 'authorId' })
   author: User | null;
 
+  /** The completed reservation this review is about (one review each). */
+  @Column({ type: 'uuid', nullable: true, unique: true })
+  reservationId: string | null;
+
   @Column({ type: 'smallint' })
   rating: number;
 

@@ -39,6 +39,10 @@ export class Subscription {
   })
   status: SubscriptionStatus;
 
+  /** The admin-managed premium plan this subscription was bought under. */
+  @Column({ type: 'uuid', nullable: true })
+  planId: string | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   startedAt: Date | null;
 

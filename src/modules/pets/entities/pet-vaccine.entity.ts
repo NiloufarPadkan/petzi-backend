@@ -28,6 +28,13 @@ export class PetVaccine {
   @Column({ type: 'date' })
   vaccineDate: string;
 
+  /** When the next dose is due; drives reminders. */
+  @Column({ type: 'date', nullable: true })
+  nextDueDate: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  notes: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }
