@@ -70,6 +70,9 @@ export class User {
   @Column({ type: 'timestamptz', nullable: true })
   lastLoginAt: Date | null;
 
+  @Column({ type: 'int', default: 0 })
+  tokenVersion: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -223,9 +223,12 @@ export class AuthService {
       const existingEmailUser =
         await this.usersService.findByEmail(normalizedEmail);
       if (existingEmailUser) {
-        throw new ConflictException(
-          'این ایمیل قبلاً ثبت شده است؛ ابتدا وارد حساب شوید و سپس گوگل را متصل کنید',
-        );
+        user = await this.usersService.update(existingEmailUser.id, {
+          googleId: googleUser.googleId,
+          ...(googleUser.profilePictureUrl && !existingEmailUser.profilePictureUrl
+            ? { profilePictureUrl: googleUser.profilePictureUrl }
+            : {}),
+        });
       }
     }
 
@@ -267,6 +270,15 @@ export class AuthService {
     }
 
     return this.buildAuthResponse(user, 'ورود با گوگل موفقیت‌آمیز بود');
+  }
+
+  async logout(userId: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+    await this.usersService.update(userId, { tokenVersion: user.tokenVersion + 1 });
+    return { message: 'با موفقیت خارج شدید' };
   }
 
   buildFrontendRedirectUrl(params: Record<string, string>): string {
@@ -522,7 +534,7 @@ export class AuthService {
     await this.usersService.update(user.id, { lastLoginAt: new Date() });
 
     const accessToken = this.signToken(
-      { sub: user.id, role: user.role, type: 'access' },
+      { sub: user.id, role: user.role, type: 'access', tokenVersion: user.tokenVersion },
       this.configService.get<string>('jwt.expiresIn')!,
     );
 

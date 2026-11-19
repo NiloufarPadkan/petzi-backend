@@ -205,6 +205,14 @@ export class AuthController {
     return this.authService.exchangeGoogleCode(dto.code);
   }
 
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Invalidate the current access token (logout)' })
+  logout(@Req() req: AuthenticatedRequest) {
+    return this.authService.logout(req.user.sub);
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
