@@ -28,6 +28,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { memoryStorage } from 'multer';
 import { hasExpectedFileSignature } from '../../common/utils/file-signature';
+import { imageUploadOptions, saveImage } from '../../common/utils/image-upload';
 import { removeUploadUrls } from '../../common/utils/upload-cleanup';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -45,6 +46,9 @@ const PROFILE_MIME_EXTENSIONS: Record<string, string> = {
   'image/png': '.png',
   'image/webp': '.webp',
 };
+
+const PROFILE_PICTURE_MAX_BYTES = 5 * 1024 * 1024;
+const PROFILE_PICTURE_DIRECTORY = 'profile-pictures';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -70,8 +74,7 @@ export class AuthController {
   @Post('register')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
-    summary:
-      'Complete registration (registration token + profile + password)',
+    summary: 'Complete registration (registration token + profile + password)',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({
@@ -245,6 +248,76 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(req.user.sub, dto);
+  }
+
+  @Post('me/profile-picture')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary: 'Upload or replace my profile picture',
+    description: 'One image (JPG, PNG or WEBP), up to 5MB.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['profilePicture'],
+      properties: { profilePicture: { type: 'string', format: 'binary' } },
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor(
+      'profilePicture',
+      imageUploadOptions(PROFILE_PICTURE_MAX_BYTES),
+    ),
+  )
+  async uploadProfilePicture(
+    @Req() req: AuthenticatedRequest,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    const url = await saveImage(file, PROFILE_PICTURE_DIRECTORY);
+    try {
+      return await this.authService.setProfilePicture(req.user.sub, url);
+    } catch (error) {
+      await removeUploadUrls([url]);
+      throw error;
+    }
+  }
+
+  @Delete('me/profile-picture')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Remove my profile picture' })
+  removeProfilePicture(@Req() req: AuthenticatedRequest) {
+    return this.authService.removeProfilePicture(req.user.sub);
+  }
+
+  @Post('me/phone/send-otp')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary: 'Change mobile number, step 1: send a code to the new number',
+  })
+  sendChangePhoneOtp(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: SendOtpDto,
+  ) {
+    return this.authService.sendChangePhoneOtp(req.user.sub, dto.phoneNumber);
+  }
+
+  @Post('me/phone/verify')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary: 'Change mobile number, step 2: confirm the code',
+    description:
+      'Switches the account to the new number, signs out other sessions and returns a fresh access token.',
+  })
+  changePhone(@Req() req: AuthenticatedRequest, @Body() dto: VerifyOtpDto) {
+    return this.authService.changePhone(req.user.sub, dto);
   }
 
   @Post('me/delete/send-otp')

@@ -18,6 +18,7 @@ import {
 } from '../../common/validators/is-iranian-phone.validator';
 import { IsStrongPasswordConstraint } from '../../common/validators/is-strong-password.validator';
 import { OtpService } from '../otp/otp.service';
+import { removeUploadUrls } from '../../common/utils/upload-cleanup';
 import { SmsService } from '../sms/sms.service';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
@@ -27,6 +28,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
+import { VerifyOtpDto } from './dto/phone-otp.dto';
 import { JwtPayload } from './interfaces/auth.interface';
 import { OneTimeTokenService } from './one-time-token.service';
 
@@ -225,7 +227,8 @@ export class AuthService {
       if (existingEmailUser) {
         user = await this.usersService.update(existingEmailUser.id, {
           googleId: googleUser.googleId,
-          ...(googleUser.profilePictureUrl && !existingEmailUser.profilePictureUrl
+          ...(googleUser.profilePictureUrl &&
+          !existingEmailUser.profilePictureUrl
             ? { profilePictureUrl: googleUser.profilePictureUrl }
             : {}),
         });
@@ -277,7 +280,9 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('کاربر یافت نشد');
     }
-    await this.usersService.update(userId, { tokenVersion: user.tokenVersion + 1 });
+    await this.usersService.update(userId, {
+      tokenVersion: user.tokenVersion + 1,
+    });
     return { message: 'با موفقیت خارج شدید' };
   }
 
@@ -388,6 +393,104 @@ export class AuthService {
     return { message: 'رمز عبور با موفقیت تغییر کرد' };
   }
 
+  /** Stores a new profile picture URL and deletes the one it replaces. */
+  async setProfilePicture(userId: string, profilePictureUrl: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+    const previous = user.profilePictureUrl;
+    await this.usersService.update(userId, { profilePictureUrl });
+    // Only files under uploads/ are ever deleted; a Google avatar URL is left.
+    if (previous) await removeUploadUrls([previous]);
+    return this.getProfile(userId);
+  }
+
+  async removeProfilePicture(userId: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+    if (user.profilePictureUrl) {
+      await this.usersService.clearProfilePicture(userId);
+      await removeUploadUrls([user.profilePictureUrl]);
+    }
+    return this.getProfile(userId);
+  }
+
+  /** Step 1 of changing the mobile number: text a code to the NEW number. */
+  async sendChangePhoneOtp(userId: string, phoneNumber: string) {
+    const normalized = normalizePhoneNumber(phoneNumber);
+    await this.assertPhoneChangeAllowed(userId, normalized);
+
+    const code = await this.sendOtpWithCooldown(
+      normalized,
+      OtpPurpose.CHANGE_PHONE,
+    );
+    return this.buildOtpSentResponse(code);
+  }
+
+  /**
+   * Step 2: the code proves the person holds the new number. Other sessions
+   * are signed out (the token version is bumped) and a fresh token returned.
+   */
+  async changePhone(userId: string, dto: VerifyOtpDto) {
+    const normalized = normalizePhoneNumber(dto.phoneNumber);
+    const user = await this.assertPhoneChangeAllowed(userId, normalized);
+
+    const valid = await this.otpService.verifyOtp(
+      normalized,
+      dto.code,
+      OtpPurpose.CHANGE_PHONE,
+    );
+    if (!valid) {
+      throw new BadRequestException('کد تأیید نامعتبر یا منقضی شده است');
+    }
+
+    try {
+      await this.usersService.update(userId, {
+        phoneNumber: normalized,
+        isPhoneVerified: true,
+        tokenVersion: user.tokenVersion + 1,
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException('این شماره موبایل قبلاً ثبت شده است');
+      }
+      throw error;
+    }
+
+    // Tell the previous number (best effort) so a hijacked change is noticed.
+    if (isNormalizedIranianMobile(user.phoneNumber)) {
+      await this.smsService
+        .sendText(
+          user.phoneNumber,
+          'شماره موبایل حساب شما در پتزی تغییر کرد. اگر این کار را شما انجام نداده‌اید با پشتیبانی تماس بگیرید.',
+        )
+        .catch(() => undefined);
+    }
+
+    const updated = await this.usersService.findById(userId);
+    return this.buildAuthResponse(updated!, 'شماره موبایل با موفقیت تغییر کرد');
+  }
+
+  private async assertPhoneChangeAllowed(
+    userId: string,
+    normalizedPhone: string,
+  ): Promise<User> {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+    if (user.phoneNumber === normalizedPhone) {
+      throw new BadRequestException('این شماره همان شماره فعلی شماست');
+    }
+    if (await this.usersService.findByPhone(normalizedPhone)) {
+      throw new ConflictException('این شماره موبایل قبلاً ثبت شده است');
+    }
+    return user;
+  }
+
   async sendDeleteAccountOtp(userId: string) {
     const user = await this.usersService.findById(userId);
     if (!user) {
@@ -469,9 +572,8 @@ export class AuthService {
   ): Promise<void> {
     let payload: RegistrationTokenPayload;
     try {
-      payload = this.jwtService.verify<RegistrationTokenPayload>(
-        registrationToken,
-      );
+      payload =
+        this.jwtService.verify<RegistrationTokenPayload>(registrationToken);
     } catch {
       throw new BadRequestException('توکن ثبت‌نام نامعتبر یا منقضی شده است');
     }
@@ -490,7 +592,9 @@ export class AuthService {
       OneTimeTokenPurpose.REGISTER,
     );
     if (!consumed || consumed.phoneNumber !== expectedPhone) {
-      throw new BadRequestException('توکن ثبت‌نام نامعتبر یا قبلاً استفاده شده است');
+      throw new BadRequestException(
+        'توکن ثبت‌نام نامعتبر یا قبلاً استفاده شده است',
+      );
     }
   }
 
@@ -534,7 +638,12 @@ export class AuthService {
     await this.usersService.update(user.id, { lastLoginAt: new Date() });
 
     const accessToken = this.signToken(
-      { sub: user.id, role: user.role, type: 'access', tokenVersion: user.tokenVersion },
+      {
+        sub: user.id,
+        role: user.role,
+        type: 'access',
+        tokenVersion: user.tokenVersion,
+      },
       this.configService.get<string>('jwt.expiresIn')!,
     );
 

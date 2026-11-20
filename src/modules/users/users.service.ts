@@ -59,6 +59,15 @@ export class UsersService {
     return user;
   }
 
+  async clearProfilePicture(id: string): Promise<void> {
+    await this.usersRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ profilePictureUrl: () => 'NULL' })
+      .where('id = :id', { id })
+      .execute();
+  }
+
   async softDeleteAccount(user: User): Promise<void> {
     const suffix = `deleted_${Date.now()}_${user.id}`;
 
