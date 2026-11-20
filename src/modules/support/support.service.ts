@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Paginated, paginated } from '../../common/dto/pagination-query.dto';
@@ -12,7 +16,12 @@ import {
   UpdateTicketDto,
 } from './dto/support.dto';
 import { FaqItem } from './entities/faq-item.entity';
-import { SupportTicket } from './entities/support-ticket.entity';
+import { removeUploadUrls } from '../../common/utils/upload-cleanup';
+import {
+  SupportTicket,
+  TicketAttachment,
+} from './entities/support-ticket.entity';
+import { MAX_TICKET_ATTACHMENTS } from './support.constants';
 
 export interface TicketView {
   id: string;
@@ -24,6 +33,7 @@ export interface TicketView {
   priority: string;
   status: string;
   adminResponse: string | null;
+  attachments: TicketAttachment[];
   resolvedAt: Date | null;
   creator: {
     id: string;
@@ -115,15 +125,63 @@ export class SupportService {
   async createTicket(
     dto: CreateTicketDto,
     creatorId: string,
+    attachments: TicketAttachment[] = [],
   ): Promise<TicketView> {
     const ticket = await this.ticketsRepository.save(
       this.ticketsRepository.create({
         ...dto,
         category: dto.category || 'general',
         creatorId,
+        attachments,
       }),
     );
     return this.findTicket(ticket.id);
+  }
+
+  /** One of the signed-in user's own tickets. */
+  async findMyTicket(creatorId: string, id: string): Promise<TicketView> {
+    return this.toView(await this.getOwnTicketOrThrow(creatorId, id));
+  }
+
+  /** Adds images to the user's own open ticket (at most 5 in total). */
+  async addAttachments(
+    creatorId: string,
+    id: string,
+    attachments: TicketAttachment[],
+  ): Promise<TicketView> {
+    const ticket = await this.getOwnTicketOrThrow(creatorId, id);
+    if (
+      ticket.status === TicketStatus.RESOLVED ||
+      ticket.status === TicketStatus.CLOSED
+    ) {
+      throw new BadRequestException('این تیکت بسته شده و پیوست جدید نمی‌پذیرد');
+    }
+    const current = ticket.attachments ?? [];
+    if (current.length + attachments.length > MAX_TICKET_ATTACHMENTS) {
+      throw new BadRequestException(
+        `هر تیکت حداکثر ${MAX_TICKET_ATTACHMENTS} پیوست دارد`,
+      );
+    }
+    await this.ticketsRepository.update(id, {
+      attachments: [...current, ...attachments],
+    });
+    return this.findMyTicket(creatorId, id);
+  }
+
+  async removeAttachment(
+    creatorId: string,
+    id: string,
+    index: number,
+  ): Promise<TicketView> {
+    const ticket = await this.getOwnTicketOrThrow(creatorId, id);
+    const current = ticket.attachments ?? [];
+    const target = current[index];
+    if (!target) throw new NotFoundException('پیوست یافت نشد');
+    await this.ticketsRepository.update(id, {
+      attachments: current.filter((_, i) => i !== index),
+    });
+    await removeUploadUrls([target.url]);
+    return this.findMyTicket(creatorId, id);
   }
 
   async findMyTickets(creatorId: string): Promise<TicketView[]> {
@@ -150,7 +208,10 @@ export class SupportService {
   }
 
   async removeTicket(id: string): Promise<void> {
-    await this.ticketsRepository.remove(await this.getTicketOrThrow(id));
+    const ticket = await this.getTicketOrThrow(id);
+    await this.ticketsRepository.remove(ticket);
+    const urls = (ticket.attachments ?? []).map((a) => a.url);
+    if (urls.length > 0) await removeUploadUrls(urls);
   }
 
   // ---- FAQ ----
@@ -186,6 +247,18 @@ export class SupportService {
 
   // ---- helpers ----
 
+  private async getOwnTicketOrThrow(
+    creatorId: string,
+    id: string,
+  ): Promise<SupportTicket> {
+    const ticket = await this.ticketsRepository.findOne({
+      where: { id, creatorId },
+      relations: { creator: true },
+    });
+    if (!ticket) throw new NotFoundException('تیکت یافت نشد');
+    return ticket;
+  }
+
   private async getTicketOrThrow(id: string): Promise<SupportTicket> {
     const ticket = await this.ticketsRepository.findOne({
       where: { id },
@@ -212,6 +285,7 @@ export class SupportService {
       priority: ticket.priority,
       status: ticket.status,
       adminResponse: ticket.adminResponse,
+      attachments: ticket.attachments ?? [],
       resolvedAt: ticket.resolvedAt,
       creator: ticket.creator
         ? {

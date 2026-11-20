@@ -22,7 +22,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN mkdir -p uploads/profile-pictures uploads/pet-documents \
-  uploads/pet-photos uploads/vet-documents uploads/clinic-media \
+  uploads/pet-photos uploads/support-attachments uploads/vet-documents \
+  uploads/clinic-media \
   && chown -R petzi:petzi /app \
   && chmod +x /usr/local/bin/docker-entrypoint.sh
 # Stay root so the entrypoint can chown the mounted uploads volume, then

@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   ParseUUIDPipe,
   Post,
   Query,
@@ -15,7 +17,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/auth.guards';
 import type { AuthenticatedRequest } from '../auth/interfaces/auth.interface';
-import { CheckoutDto } from './dto/premium.dto';
+import { CancelSubscriptionDto, CheckoutDto } from './dto/premium.dto';
 import { PremiumService } from './premium.service';
 
 @ApiTags('Premium')
@@ -47,6 +49,17 @@ export class PremiumController {
   @UseGuards(JwtAuthGuard)
   payments(@Req() req: AuthenticatedRequest) {
     return this.premiumService.myPayments(req.user.sub);
+  }
+
+  @Post('cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Cancel my subscription now (remaining days are not kept)',
+  })
+  cancel(@Req() req: AuthenticatedRequest, @Body() dto: CancelSubscriptionDto) {
+    return this.premiumService.cancel(req.user.sub, dto.reason);
   }
 
   @Post('checkout')

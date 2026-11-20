@@ -15,6 +15,13 @@ import {
 } from '../../../common/enums/admin-panel.enums';
 import { User } from '../../users/entities/user.entity';
 
+export interface TicketAttachment {
+  url: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 @Entity('support_tickets')
 @Index(['status'])
 @Index(['creatorId'])
@@ -51,6 +58,10 @@ export class SupportTicket {
 
   @Column({ type: 'enum', enum: TicketStatus, default: TicketStatus.OPEN })
   status: TicketStatus;
+
+  /** Screenshots or photos the reporter added (images only). */
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  attachments: TicketAttachment[];
 
   @Column({ type: 'text', nullable: true })
   adminResponse: string | null;

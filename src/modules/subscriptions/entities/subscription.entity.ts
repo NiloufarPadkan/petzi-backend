@@ -49,6 +49,13 @@ export class Subscription {
   @Column({ type: 'timestamptz', nullable: true })
   expiresAt: Date | null;
 
+  /** Set when the subscriber cancelled before the expiry date. */
+  @Column({ type: 'timestamptz', nullable: true })
+  cancelledAt: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  cancelReason: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

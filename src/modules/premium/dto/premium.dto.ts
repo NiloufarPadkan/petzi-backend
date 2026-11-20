@@ -9,6 +9,14 @@ import {
   Min,
 } from 'class-validator';
 
+export class CancelSubscriptionDto {
+  @ApiPropertyOptional({ example: 'دیگر نیازی ندارم' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  reason?: string;
+}
+
 export class CheckoutDto {
   @ApiProperty({ description: 'A plan id from GET /premium/plans' })
   @IsUUID()

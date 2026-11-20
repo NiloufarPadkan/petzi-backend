@@ -68,6 +68,9 @@ async function bootstrap() {
   app.useStaticAssets(join(__dirname, '..', 'uploads', 'profile-pictures'), {
     prefix: '/uploads/profile-pictures',
   });
+  app.useStaticAssets(join(__dirname, '..', 'uploads', 'support-attachments'), {
+    prefix: '/uploads/support-attachments',
+  });
   app.useStaticAssets(join(__dirname, '..', 'uploads', 'pet-photos'), {
     prefix: '/uploads/pet-photos',
   });

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Not, Repository } from 'typeorm';
 import {
   PaymentMethod,
   PaymentPurpose,
@@ -87,6 +87,7 @@ export class PremiumService {
     if (!active) {
       return {
         isPremium: false,
+        canCancel: false,
         plan: SubscriptionPlan.FREE,
         planDetails: null,
         expiresAt: null,
@@ -98,6 +99,7 @@ export class PremiumService {
       : null;
     return {
       isPremium: true,
+      canCancel: true,
       plan: latest.plan,
       planDetails: planDetails
         ? {
@@ -113,6 +115,46 @@ export class PremiumService {
         ? Math.max(0, Math.ceil((latest.expiresAt.getTime() - now) / DAY_MS))
         : null,
     };
+  }
+
+  /**
+   * Cancels the user's paid subscription right away; the remaining days are
+   * lost. Plans are bought one-off (no auto-renewal), so this is the only way
+   * to end one early. No money is returned here: refunds go through the admin
+   * payments screen.
+   */
+  async cancel(userId: string, reason?: string) {
+    const subscription = await this.subscriptionsRepository.findOne({
+      where: {
+        userId,
+        status: SubscriptionStatus.ACTIVE,
+        plan: Not(SubscriptionPlan.FREE),
+      },
+      order: { createdAt: 'DESC' },
+    });
+    const now = new Date();
+    if (
+      !subscription ||
+      (subscription.expiresAt &&
+        subscription.expiresAt.getTime() <= now.getTime())
+    ) {
+      throw new BadRequestException('شما اشتراک فعالی ندارید');
+    }
+
+    await this.subscriptionsRepository.update(subscription.id, {
+      status: SubscriptionStatus.INACTIVE,
+      expiresAt: now,
+      cancelledAt: now,
+      cancelReason: reason?.trim() || null,
+    });
+    await this.notificationsService.notify(userId, {
+      type: NotificationType.PAYMENT,
+      title: 'اشتراک لغو شد',
+      body: 'اشتراک ویژه شما لغو شد و دسترسی‌های ویژه غیرفعال است.',
+      data: { subscriptionId: subscription.id },
+      dedupeKey: `subscription-cancelled:${subscription.id}`,
+    });
+    return this.me(userId);
   }
 
   /** Creates a pending payment and returns where to send the payer. */
