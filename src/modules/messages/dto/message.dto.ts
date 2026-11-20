@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -47,4 +48,15 @@ export class QueryConversationsDto extends PaginationQueryDto {
   @Transform(toBoolean)
   @IsBoolean()
   unreadOnly?: boolean;
+}
+
+export class QueryMyMessagesDto extends PaginationQueryDto {
+  @ApiPropertyOptional({
+    example: '2026-11-20T09:30:00.000Z',
+    description:
+      'Only messages newer than this instant, oldest first (polling fallback for the live stream)',
+  })
+  @IsOptional()
+  @IsDateString()
+  after?: string;
 }

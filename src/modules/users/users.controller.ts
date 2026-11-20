@@ -162,6 +162,16 @@ export class UsersController {
     return this.adminUsersService.remove(id);
   }
 
+  @Post(':id/two-factor/reset')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: "Turn off a user's two-step login (for a locked-out account)",
+  })
+  @ApiParam({ name: 'id', description: 'User UUID' })
+  resetTwoFactor(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminUsersService.resetTwoFactor(id);
+  }
+
   @Post(':id/profile-picture')
   @ApiOperation({ summary: "Upload a user's profile picture" })
   @ApiParam({ name: 'id', description: 'User UUID' })

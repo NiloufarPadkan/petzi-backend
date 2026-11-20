@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Matches,
   MaxLength,
   ValidateIf,
 } from 'class-validator';
@@ -240,6 +241,20 @@ export class UpdatePetDto {
   @IsOptional()
   @IsString()
   additionalNotes?: string;
+
+  @ApiPropertyOptional({
+    example: '985112345678903',
+    description:
+      'Microchip number (6-30 letters, digits or hyphens). Send an empty string to remove it.',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @Matches(/^$|^[A-Za-z0-9-]{6,30}$/, {
+    message: 'شماره میکروچیپ نامعتبر است',
+  })
+  microchipNumber?: string;
 }
 
 export class CreatePetDto extends UpdatePetDto {}

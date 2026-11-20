@@ -34,6 +34,28 @@ export class OneTimeTokenService {
     return { jti, expiresAt };
   }
 
+  /** Looks at an unused, unexpired token without consuming it. */
+  async peek(
+    jti: string,
+    purpose: OneTimeTokenPurpose,
+  ): Promise<OneTimeToken | null> {
+    const token = await this.tokenRepository.findOne({
+      where: { jti, purpose, isUsed: false },
+    });
+    if (!token || token.expiresAt < new Date()) return null;
+    return token;
+  }
+
+  /** Counts a failed attempt; the token is burned after `maxAttempts`. */
+  async recordFailure(id: string, maxAttempts: number): Promise<number> {
+    await this.tokenRepository.increment({ id }, 'failedAttempts', 1);
+    const token = await this.tokenRepository.findOneByOrFail({ id });
+    if (token.failedAttempts >= maxAttempts) {
+      await this.tokenRepository.update({ id }, { isUsed: true });
+    }
+    return token.failedAttempts;
+  }
+
   /**
    * Atomically consumes a one-time token. Returns the row when successful,
    * otherwise null (missing, expired, wrong purpose, or already used).

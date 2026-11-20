@@ -34,6 +34,8 @@ export interface TicketView {
   status: string;
   adminResponse: string | null;
   attachments: TicketAttachment[];
+  relatedSection: string | null;
+  occurredAt: Date | null;
   resolvedAt: Date | null;
   creator: {
     id: string;
@@ -78,6 +80,11 @@ export class SupportService {
     }
     if (query.category) {
       qb.andWhere('ticket.category = :category', { category: query.category });
+    }
+    if (query.relatedSection) {
+      qb.andWhere('ticket.relatedSection = :relatedSection', {
+        relatedSection: query.relatedSection,
+      });
     }
     if (query.from)
       qb.andWhere('ticket.createdAt >= :from', { from: query.from });
@@ -127,9 +134,16 @@ export class SupportService {
     creatorId: string,
     attachments: TicketAttachment[] = [],
   ): Promise<TicketView> {
+    const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : null;
+    // Allow a few minutes of clock difference between the phone and the server.
+    if (occurredAt && occurredAt.getTime() > Date.now() + 5 * 60_000) {
+      throw new BadRequestException('زمان وقوع مشکل نمی‌تواند در آینده باشد');
+    }
     const ticket = await this.ticketsRepository.save(
       this.ticketsRepository.create({
         ...dto,
+        occurredAt,
+        relatedSection: dto.relatedSection ?? null,
         category: dto.category || 'general',
         creatorId,
         attachments,
@@ -286,6 +300,8 @@ export class SupportService {
       status: ticket.status,
       adminResponse: ticket.adminResponse,
       attachments: ticket.attachments ?? [],
+      relatedSection: ticket.relatedSection,
+      occurredAt: ticket.occurredAt,
       resolvedAt: ticket.resolvedAt,
       creator: ticket.creator
         ? {

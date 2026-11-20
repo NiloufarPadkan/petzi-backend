@@ -240,6 +240,15 @@ export class AdminUsersService {
     return this.findOne(id);
   }
 
+  /** For a user locked out of two-step login (lost password and codes). */
+  async resetTwoFactor(id: string): Promise<void> {
+    await this.getUserOrThrow(id);
+    await this.usersRepository.update(id, {
+      twoFactorEnabled: false,
+      twoFactorRecoveryCodes: null,
+    });
+  }
+
   async removeProfilePicture(id: string): Promise<AdminUserResponseDto> {
     const user = await this.getUserOrThrow(id);
     const previousUrl = user.profilePictureUrl;

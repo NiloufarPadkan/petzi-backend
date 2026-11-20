@@ -31,6 +31,9 @@ export class OneTimeToken {
   @Column({ default: false })
   isUsed: boolean;
 
+  @Column({ type: 'smallint', default: 0 })
+  failedAttempts: number;
+
   @CreateDateColumn()
   createdAt: Date;
 }

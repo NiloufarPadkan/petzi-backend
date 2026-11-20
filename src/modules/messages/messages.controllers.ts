@@ -10,8 +10,11 @@ import {
   Post,
   Query,
   Req,
+  Sse,
   UseGuards,
 } from '@nestjs/common';
+import type { MessageEvent } from '@nestjs/common';
+import type { Observable } from 'rxjs';
 import {
   ApiBearerAuth,
   ApiNoContentResponse,
@@ -24,6 +27,7 @@ import { JwtAuthGuard } from '../auth/guards/auth.guards';
 import type { AuthenticatedRequest } from '../auth/interfaces/auth.interface';
 import {
   QueryConversationsDto,
+  QueryMyMessagesDto,
   SendMessageDto,
   StartConversationDto,
 } from './dto/message.dto';
@@ -49,6 +53,14 @@ export class AdminMessagesController {
       dto.body,
       req.user.sub,
     );
+  }
+
+  @Sse('stream')
+  @ApiOperation({
+    summary: 'Live feed (Server-Sent Events) of every new support message',
+  })
+  stream(): Observable<MessageEvent> {
+    return this.messagesService.streamForAdmin();
   }
 
   @Get(':id/messages')
@@ -95,9 +107,36 @@ export class UserMessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 
   @Get()
-  @ApiOperation({ summary: "The signed-in user's support conversation" })
-  mine(@Query() query: PaginationQueryDto, @Req() req: AuthenticatedRequest) {
+  @ApiOperation({
+    summary: "The signed-in user's support conversation",
+    description:
+      'Newest first. Pass `after` to get only newer messages (polling). Opening page 1 marks replies as read.',
+  })
+  mine(@Query() query: QueryMyMessagesDto, @Req() req: AuthenticatedRequest) {
     return this.messagesService.findMine(req.user.sub, query);
+  }
+
+  @Sse('stream')
+  @ApiOperation({
+    summary: 'Live chat (Server-Sent Events): new messages as they arrive',
+    description:
+      'Send the Authorization header. Events: `message` (a chat message) and `ping` (keep-alive). Reconnect and call GET /messages?after=<last createdAt> to catch up.',
+  })
+  stream(@Req() req: AuthenticatedRequest): Observable<MessageEvent> {
+    return this.messagesService.streamForUser(req.user.sub);
+  }
+
+  @Get('unread-count')
+  @ApiOperation({ summary: 'Support replies I have not opened (badge)' })
+  unreadCount(@Req() req: AuthenticatedRequest) {
+    return this.messagesService.unreadCountForUser(req.user.sub);
+  }
+
+  @Post('read')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Mark the support replies as read' })
+  markRead(@Req() req: AuthenticatedRequest) {
+    return this.messagesService.markReadForUser(req.user.sub);
   }
 
   @Post()

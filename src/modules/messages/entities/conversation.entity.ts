@@ -32,6 +32,10 @@ export class Conversation {
   @Column({ type: 'int', default: 0 })
   unreadByAdmin: number;
 
+  /** Support replies the user has not opened yet. */
+  @Column({ type: 'int', default: 0 })
+  unreadByUser: number;
+
   @CreateDateColumn()
   createdAt: Date;
 }

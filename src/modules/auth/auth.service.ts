@@ -9,6 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { createHash, randomInt } from 'node:crypto';
 import { QueryFailedError } from 'typeorm';
 import { OtpPurpose } from '../../common/enums/otp-purpose.enum';
 import { OneTimeTokenPurpose } from '../../common/enums/one-time-token-purpose.enum';
@@ -29,6 +30,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { VerifyOtpDto } from './dto/phone-otp.dto';
+import { TwoFactorLoginDto } from './dto/two-factor.dto';
 import { JwtPayload } from './interfaces/auth.interface';
 import { OneTimeTokenService } from './one-time-token.service';
 
@@ -38,6 +40,17 @@ interface RegistrationTokenPayload {
   purpose: 'register';
   type: 'registration';
 }
+
+const TWO_FACTOR_TOKEN_TTL_SECONDS = 300;
+const TWO_FACTOR_MAX_ATTEMPTS = 5;
+const RECOVERY_CODE_COUNT = 10;
+// No 0/O/1/I so a code read aloud or copied by hand is not misread.
+const RECOVERY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+const hashRecoveryCode = (code: string): string =>
+  createHash('sha256')
+    .update(code.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+    .digest('hex');
 
 @Injectable()
 export class AuthService {
@@ -187,6 +200,7 @@ export class AuthService {
       throw new BadRequestException('کد تأیید نامعتبر یا منقضی شده است');
     }
 
+    if (user.twoFactorEnabled) return this.startTwoFactor(user);
     return this.buildAuthResponse(user, 'ورود با موفقیت انجام شد');
   }
 
@@ -272,6 +286,7 @@ export class AuthService {
       throw new NotFoundException('کاربر یافت نشد');
     }
 
+    if (user.twoFactorEnabled) return this.startTwoFactor(user);
     return this.buildAuthResponse(user, 'ورود با گوگل موفقیت‌آمیز بود');
   }
 
@@ -391,6 +406,170 @@ export class AuthService {
     await this.usersService.update(userId, { password: hashed });
 
     return { message: 'رمز عبور با موفقیت تغییر کرد' };
+  }
+
+  // ---- two-step login ----
+
+  /**
+   * First factor passed (SMS code or Google) but two-step login is on: hand
+   * out a short-lived token instead of an access token.
+   */
+  private async startTwoFactor(user: User) {
+    if (user.isSuspended) {
+      throw new ForbiddenException('حساب کاربری شما تعلیق شده است');
+    }
+    const { jti } = await this.oneTimeTokenService.issue({
+      purpose: OneTimeTokenPurpose.TWO_FACTOR,
+      expiresInSeconds: TWO_FACTOR_TOKEN_TTL_SECONDS,
+      userId: user.id,
+    });
+    return {
+      requiresTwoFactor: true as const,
+      twoFactorToken: jti,
+      expiresIn: TWO_FACTOR_TOKEN_TTL_SECONDS,
+      message: 'رمز عبور یا یکی از کدهای بازیابی را وارد کنید',
+    };
+  }
+
+  /** Second sign-in step: the password or one recovery code. */
+  async completeTwoFactorLogin(dto: TwoFactorLoginDto) {
+    if (!!dto.password === !!dto.recoveryCode) {
+      throw new BadRequestException(
+        'فقط یکی از رمز عبور یا کد بازیابی را ارسال کنید',
+      );
+    }
+    const token = await this.oneTimeTokenService.peek(
+      dto.twoFactorToken,
+      OneTimeTokenPurpose.TWO_FACTOR,
+    );
+    const user = token?.userId
+      ? await this.usersService.findForTwoFactor(token.userId)
+      : null;
+    if (!token || !user?.twoFactorEnabled) {
+      throw new BadRequestException(
+        'نشست ورود منقضی شده است؛ دوباره وارد شوید',
+      );
+    }
+
+    const verified = dto.password
+      ? !!user.password && (await bcrypt.compare(dto.password, user.password))
+      : await this.usersService.consumeRecoveryCode(
+          user.id,
+          hashRecoveryCode(dto.recoveryCode!),
+        );
+    if (!verified) {
+      const failures = await this.oneTimeTokenService.recordFailure(
+        token.id,
+        TWO_FACTOR_MAX_ATTEMPTS,
+      );
+      throw new UnauthorizedException(
+        failures >= TWO_FACTOR_MAX_ATTEMPTS
+          ? 'تلاش‌های ناموفق بیش از حد مجاز بود؛ دوباره وارد شوید'
+          : 'رمز عبور یا کد بازیابی نادرست است',
+      );
+    }
+
+    const consumed = await this.oneTimeTokenService.consume(
+      dto.twoFactorToken,
+      OneTimeTokenPurpose.TWO_FACTOR,
+    );
+    if (!consumed) {
+      throw new BadRequestException(
+        'نشست ورود منقضی شده است؛ دوباره وارد شوید',
+      );
+    }
+    return this.buildAuthResponse(user, 'ورود با موفقیت انجام شد');
+  }
+
+  async getTwoFactorStatus(userId: string) {
+    const user = await this.requireUserForTwoFactor(userId);
+    return {
+      enabled: user.twoFactorEnabled,
+      hasPassword: !!user.password,
+      recoveryCodesRemaining: user.twoFactorRecoveryCodes?.length ?? 0,
+    };
+  }
+
+  /** Turns two-step login on; the recovery codes are shown only this once. */
+  async enableTwoFactor(userId: string, password: string) {
+    const user = await this.requireUserForTwoFactor(userId);
+    if (user.twoFactorEnabled) {
+      throw new ConflictException('ورود دومرحله‌ای قبلاً فعال شده است');
+    }
+    await this.assertPassword(user, password);
+
+    const codes = this.generateRecoveryCodes();
+    await this.usersService.update(userId, {
+      twoFactorEnabled: true,
+      twoFactorRecoveryCodes: codes.map(hashRecoveryCode),
+    });
+    return {
+      enabled: true,
+      recoveryCodes: codes,
+      message:
+        'ورود دومرحله‌ای فعال شد. کدهای بازیابی را در جای امنی نگه دارید؛ دوباره نمایش داده نمی‌شوند.',
+    };
+  }
+
+  async disableTwoFactor(userId: string, password: string) {
+    const user = await this.requireUserForTwoFactor(userId);
+    if (!user.twoFactorEnabled) {
+      throw new BadRequestException('ورود دومرحله‌ای فعال نیست');
+    }
+    await this.assertPassword(user, password);
+
+    await this.usersService.update(userId, {
+      twoFactorEnabled: false,
+      twoFactorRecoveryCodes: null,
+    });
+    return { enabled: false, message: 'ورود دومرحله‌ای غیرفعال شد' };
+  }
+
+  /** Replaces all recovery codes with a fresh set (the old ones stop working). */
+  async regenerateRecoveryCodes(userId: string, password: string) {
+    const user = await this.requireUserForTwoFactor(userId);
+    if (!user.twoFactorEnabled) {
+      throw new BadRequestException('ورود دومرحله‌ای فعال نیست');
+    }
+    await this.assertPassword(user, password);
+
+    const codes = this.generateRecoveryCodes();
+    await this.usersService.update(userId, {
+      twoFactorRecoveryCodes: codes.map(hashRecoveryCode),
+    });
+    return { recoveryCodes: codes };
+  }
+
+  private async requireUserForTwoFactor(userId: string): Promise<User> {
+    const user = await this.usersService.findForTwoFactor(userId);
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+    return user;
+  }
+
+  private async assertPassword(user: User, password: string): Promise<void> {
+    if (!user.password) {
+      throw new BadRequestException(
+        'این حساب رمز عبور ندارد؛ برای ورود دومرحله‌ای ابتدا رمز عبور داشته باشید',
+      );
+    }
+    if (!(await bcrypt.compare(password, user.password))) {
+      throw new UnauthorizedException('رمز عبور نادرست است');
+    }
+  }
+
+  /** Ten codes like `K7M2Q-9XWPD`. */
+  private generateRecoveryCodes(): string[] {
+    const part = () =>
+      Array.from(
+        { length: 5 },
+        () => RECOVERY_CODE_ALPHABET[randomInt(RECOVERY_CODE_ALPHABET.length)],
+      ).join('');
+    return Array.from(
+      { length: RECOVERY_CODE_COUNT },
+      () => `${part()}-${part()}`,
+    );
   }
 
   /** Stores a new profile picture URL and deletes the one it replaces. */
@@ -657,6 +836,7 @@ export class AuthService {
   private sanitizeUser(user: User) {
     const safeUser: Partial<User> = { ...user };
     delete safeUser.password;
+    delete safeUser.twoFactorRecoveryCodes;
     return safeUser as Omit<User, 'password'>;
   }
 

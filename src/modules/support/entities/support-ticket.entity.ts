@@ -49,6 +49,14 @@ export class SupportTicket {
   @Column({ type: 'text' })
   description: string;
 
+  /** Which part of the app the problem is about (e.g. "reservations"). */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  relatedSection: string | null;
+
+  /** When the problem happened, as reported by the user. */
+  @Column({ type: 'timestamptz', nullable: true })
+  occurredAt: Date | null;
+
   @Column({
     type: 'enum',
     enum: TicketPriority,

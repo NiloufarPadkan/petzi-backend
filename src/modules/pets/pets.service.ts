@@ -160,6 +160,12 @@ export class PetsService {
       }
     }
 
+    // The chip number is stored upper-cased; an empty string clears it.
+    if (dto.microchipNumber !== undefined) {
+      changes.microchipNumber =
+        dto.microchipNumber === '' ? null : dto.microchipNumber.toUpperCase();
+    }
+
     if (Object.keys(changes).length === 0) {
       const unchanged = await this.getOwnedPet(ownerId, petId, true);
       return {
@@ -500,6 +506,7 @@ export class PetsService {
       id: pet.id,
       status: pet.status,
       photoUrl: pet.photoUrl,
+      microchipNumber: pet.microchipNumber,
       name: pet.name,
       type: pet.type,
       typeLabel: pet.type ? PET_TYPE_LABELS[pet.type] : null,

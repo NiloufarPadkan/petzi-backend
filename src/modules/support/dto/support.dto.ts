@@ -44,6 +44,24 @@ export class CreateTicketDto {
   @IsOptional()
   @IsEnum(TicketPriority)
   priority?: TicketPriority;
+
+  @ApiPropertyOptional({
+    example: 'reservations',
+    description: 'The part of the app the problem is about',
+  })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(100)
+  relatedSection?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-11-20T09:30:00.000Z',
+    description: 'When the problem happened (not in the future)',
+  })
+  @IsOptional()
+  @IsDateString()
+  occurredAt?: string;
 }
 
 export class UpdateTicketDto {
@@ -73,6 +91,11 @@ export class UpdateTicketDto {
 }
 
 export class QueryTicketsDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ description: 'Only tickets about this app section' })
+  @IsOptional()
+  @IsString()
+  relatedSection?: string;
+
   @ApiPropertyOptional({ description: 'Subject, number or creator name/phone' })
   @IsOptional()
   @Transform(trim)

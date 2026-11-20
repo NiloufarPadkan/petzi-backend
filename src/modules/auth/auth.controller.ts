@@ -4,6 +4,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   HttpException,
   Patch,
   Post,
@@ -33,6 +35,7 @@ import { removeUploadUrls } from '../../common/utils/upload-cleanup';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { SendOtpDto, VerifyOtpDto } from './dto/phone-otp.dto';
+import { TwoFactorLoginDto, TwoFactorPasswordDto } from './dto/two-factor.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
@@ -248,6 +251,72 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(req.user.sub, dto);
+  }
+
+  @Post('login/2fa')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Two-step login, step 2: password or a recovery code',
+    description:
+      'Use the twoFactorToken returned by login/verify-otp (or the Google exchange) when it says requiresTwoFactor. Five wrong tries burn the token.',
+  })
+  loginTwoFactor(@Body() dto: TwoFactorLoginDto) {
+    return this.authService.completeTwoFactorLogin(dto);
+  }
+
+  @Get('me/2fa')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Two-step login status' })
+  twoFactorStatus(@Req() req: AuthenticatedRequest) {
+    return this.authService.getTwoFactorStatus(req.user.sub);
+  }
+
+  @Post('me/2fa/enable')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary: 'Turn on two-step login (confirm with the password)',
+    description:
+      'Returns 10 recovery codes once. Keep them: each works one time if you forget the password.',
+  })
+  enableTwoFactor(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: TwoFactorPasswordDto,
+  ) {
+    return this.authService.enableTwoFactor(req.user.sub, dto.password);
+  }
+
+  @Post('me/2fa/disable')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary: 'Turn off two-step login (confirm with the password)',
+  })
+  disableTwoFactor(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: TwoFactorPasswordDto,
+  ) {
+    return this.authService.disableTwoFactor(req.user.sub, dto.password);
+  }
+
+  @Post('me/2fa/recovery-codes')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary: 'Generate new recovery codes (the old ones stop working)',
+  })
+  regenerateRecoveryCodes(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: TwoFactorPasswordDto,
+  ) {
+    return this.authService.regenerateRecoveryCodes(req.user.sub, dto.password);
   }
 
   @Post('me/profile-picture')

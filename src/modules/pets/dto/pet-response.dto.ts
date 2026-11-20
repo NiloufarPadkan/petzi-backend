@@ -47,6 +47,13 @@ export class PetResponseDto {
   })
   photoUrl?: string | null;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    example: '985112345678903',
+    description: 'Microchip number',
+  })
+  microchipNumber?: string | null;
+
   @ApiProperty({ enum: PetStatus, example: PetStatus.DRAFT })
   status: PetStatus;
 

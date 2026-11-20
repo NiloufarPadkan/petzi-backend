@@ -59,6 +59,34 @@ export class UsersService {
     return user;
   }
 
+  /** The user with the password hash and unused recovery-code hashes loaded. */
+  async findForTwoFactor(id: string): Promise<User | null> {
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .addSelect('user.twoFactorRecoveryCodes')
+      .where('user.id = :id', { id })
+      .andWhere('user.deletedAt IS NULL')
+      .getOne();
+  }
+
+  /** Atomically spends one recovery code; false when it was not available. */
+  async consumeRecoveryCode(id: string, codeHash: string): Promise<boolean> {
+    const result = await this.usersRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({
+        twoFactorRecoveryCodes: () =>
+          '"twoFactorRecoveryCodes" - CAST(:codeHash AS text)',
+      })
+      .where('id = :id AND jsonb_exists("twoFactorRecoveryCodes", :codeHash)', {
+        id,
+        codeHash,
+      })
+      .execute();
+    return result.affected === 1;
+  }
+
   async clearProfilePicture(id: string): Promise<void> {
     await this.usersRepository
       .createQueryBuilder()

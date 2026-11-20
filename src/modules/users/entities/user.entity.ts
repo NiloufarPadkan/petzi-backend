@@ -79,6 +79,14 @@ export class User {
   @Column({ type: 'int', default: 0 })
   tokenVersion: number;
 
+  /** Sign-in asks for the account password (or a recovery code) after the SMS code. */
+  @Column({ default: false })
+  twoFactorEnabled: boolean;
+
+  /** SHA-256 hashes of the unused recovery codes; never sent to clients. */
+  @Column({ type: 'jsonb', nullable: true, select: false })
+  twoFactorRecoveryCodes: string[] | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

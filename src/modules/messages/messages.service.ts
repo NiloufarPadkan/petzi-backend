@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, MessageEvent, NotFoundException } from '@nestjs/common';
+import { Observable, Subject, filter, interval, map, merge } from 'rxjs';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Raw, Repository } from 'typeorm';
 import {
   Paginated,
   PaginationQueryDto,
@@ -8,7 +9,7 @@ import {
 } from '../../common/dto/pagination-query.dto';
 import { MessageSenderRole } from '../../common/enums/admin-panel.enums';
 import { User } from '../users/entities/user.entity';
-import { QueryConversationsDto } from './dto/message.dto';
+import { QueryConversationsDto, QueryMyMessagesDto } from './dto/message.dto';
 import { ChatMessage } from './entities/chat-message.entity';
 import { Conversation } from './entities/conversation.entity';
 
@@ -27,9 +28,23 @@ export interface ConversationView {
 }
 
 const PREVIEW_LENGTH = 120;
+const HEARTBEAT_MS = 25_000;
+
+/** Something that happened in a conversation, pushed to live listeners. */
+interface ChatEvent {
+  userId: string;
+  message: ChatMessage;
+}
 
 @Injectable()
 export class MessagesService {
+  /**
+   * Live feed for the SSE streams. It lives in this process only, so with
+   * several server instances a listener sees messages sent through its own
+   * instance; the `after` cursor on GET /messages covers the rest.
+   */
+  private readonly events = new Subject<ChatEvent>();
+
   constructor(
     @InjectRepository(Conversation)
     private readonly conversationsRepository: Repository<Conversation>,
@@ -127,21 +142,93 @@ export class MessagesService {
     );
   }
 
+  /**
+   * The user's conversation, newest first. With `after`, only newer messages
+   * come back (oldest first) - for polling. Opening the first page marks the
+   * support replies as read.
+   */
   async findMine(
     userId: string,
-    query: PaginationQueryDto,
+    query: QueryMyMessagesDto,
   ): Promise<Paginated<ChatMessage>> {
     const conversation = await this.conversationsRepository.findOne({
       where: { userId },
     });
     if (!conversation) return paginated([], 0, query);
+
+    const after = query.after ? new Date(query.after) : null;
     const [items, total] = await this.messagesRepository.findAndCount({
-      where: { conversationId: conversation.id },
-      order: { createdAt: 'DESC' },
+      where: {
+        conversationId: conversation.id,
+        // Timestamps come back rounded to the millisecond but are stored with
+        // microseconds, so compare at millisecond precision or the message the
+        // cursor came from would be returned again.
+        ...(after
+          ? {
+              createdAt: Raw(
+                (alias) => `date_trunc('milliseconds', ${alias}) > :after`,
+                { after },
+              ),
+            }
+          : {}),
+      },
+      order: { createdAt: after ? 'ASC' : 'DESC' },
       skip: (query.page - 1) * query.limit,
       take: query.limit,
     });
+    if (!after && query.page === 1 && conversation.unreadByUser > 0) {
+      await this.conversationsRepository.update(conversation.id, {
+        unreadByUser: 0,
+      });
+    }
     return paginated(items, total, query);
+  }
+
+  async unreadCountForUser(userId: string): Promise<{ count: number }> {
+    const conversation = await this.conversationsRepository.findOne({
+      where: { userId },
+      select: { id: true, unreadByUser: true },
+    });
+    return { count: conversation?.unreadByUser ?? 0 };
+  }
+
+  async markReadForUser(userId: string): Promise<void> {
+    await this.conversationsRepository.update({ userId }, { unreadByUser: 0 });
+  }
+
+  /** Every message in the user's own conversation, as it happens. */
+  streamForUser(userId: string): Observable<MessageEvent> {
+    return this.withHeartbeat(
+      this.events.pipe(filter((event) => event.userId === userId)),
+    );
+  }
+
+  /** Every message in every conversation, for the admin inbox. */
+  streamForAdmin(): Observable<MessageEvent> {
+    return this.withHeartbeat(this.events.asObservable());
+  }
+
+  private withHeartbeat(
+    source: Observable<ChatEvent>,
+  ): Observable<MessageEvent> {
+    const messages = source.pipe(
+      map(({ userId, message }) => ({
+        type: 'message',
+        data: {
+          id: message.id,
+          conversationId: message.conversationId,
+          userId,
+          senderRole: message.senderRole,
+          body: message.body,
+          createdAt: message.createdAt,
+        },
+      })),
+    );
+    // A comment-sized ping keeps proxies from closing an idle connection.
+    const pings = interval(HEARTBEAT_MS).pipe(
+      map(() => ({ type: 'ping', data: {} })),
+    );
+    return merge(messages, pings);
   }
 
   async removeMessage(
@@ -169,7 +256,7 @@ export class MessagesService {
     senderId: string,
     body: string,
   ): Promise<ChatMessage> {
-    return this.dataSource.transaction(async (manager) => {
+    const saved = await this.dataSource.transaction(async (manager) => {
       const message = await manager.save(
         manager.create(ChatMessage, {
           conversationId,
@@ -186,12 +273,20 @@ export class MessagesService {
           lastMessagePreview: body.slice(0, PREVIEW_LENGTH),
           ...(senderRole === MessageSenderRole.USER
             ? { unreadByAdmin: () => '"unreadByAdmin" + 1' }
-            : {}),
+            : { unreadByUser: () => '"unreadByUser" + 1' }),
         })
         .where('id = :conversationId', { conversationId });
       await update.execute();
       return message;
     });
+
+    const conversation = await this.conversationsRepository.findOneBy({
+      id: conversationId,
+    });
+    if (conversation) {
+      this.events.next({ userId: conversation.userId, message: saved });
+    }
+    return saved;
   }
 
   private async refreshLastMessage(conversationId: string): Promise<void> {
