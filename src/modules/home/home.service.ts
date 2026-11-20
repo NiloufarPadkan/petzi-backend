@@ -89,7 +89,12 @@ export class HomeService {
 
     return {
       unreadNotifications: unread,
-      pets: pets.map((pet) => ({ id: pet.id, name: pet.name, type: pet.type })),
+      pets: pets.map((pet) => ({
+        id: pet.id,
+        name: pet.name,
+        type: pet.type,
+        photoUrl: pet.photoUrl,
+      })),
       selectedPet: selected ? await this.petSummary(selected) : null,
       needsAttention,
       upcomingReservations: upcoming,
@@ -164,6 +169,7 @@ export class HomeService {
     return {
       id: pet.id,
       name: pet.name,
+      photoUrl: pet.photoUrl,
       type: pet.type,
       breed: pet.breed,
       gender: pet.gender,

@@ -381,6 +381,7 @@ export class BookingsService {
         ? {
             id: r.pet.id,
             name: r.pet.name,
+            photoUrl: r.pet.photoUrl,
             type: r.pet.type,
             breed: r.pet.breed,
           }

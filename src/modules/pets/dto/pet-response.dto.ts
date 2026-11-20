@@ -40,6 +40,13 @@ export class PetResponseDto {
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
   id: string;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    example: '/uploads/pet-photos/0b1f3c9e.jpg',
+    description: 'Pet photo URL',
+  })
+  photoUrl?: string | null;
+
   @ApiProperty({ enum: PetStatus, example: PetStatus.DRAFT })
   status: PetStatus;
 
@@ -176,6 +183,6 @@ export class PetDocumentsUploadResponseDto {
 }
 
 export class PetDeleteResponseDto {
-  @ApiProperty({ example: 'پیش‌نویس حذف شد' })
+  @ApiProperty({ example: 'حیوان خانگی حذف شد' })
   message: string;
 }

@@ -85,6 +85,7 @@ export class ClinicPatientsService {
       pets.map((pet) => ({
         id: pet.id,
         name: pet.name,
+        photoUrl: pet.photoUrl,
         type: pet.type,
         breed: pet.breed,
         gender: pet.gender,
@@ -117,6 +118,7 @@ export class ClinicPatientsService {
     return {
       id: pet.id,
       name: pet.name,
+      photoUrl: pet.photoUrl,
       type: pet.type,
       breed: pet.breed,
       gender: pet.gender,

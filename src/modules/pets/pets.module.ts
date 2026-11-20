@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { Reservation } from '../reservations/entities/reservation.entity';
 import { User } from '../users/entities/user.entity';
 import { Pet } from './entities/pet.entity';
 import { PetVaccine } from './entities/pet-vaccine.entity';
@@ -9,7 +10,9 @@ import { PetsController } from './pets.controller';
 import { PetsService } from './pets.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Pet, PetVaccine, PetDocument, User])],
+  imports: [
+    TypeOrmModule.forFeature([Pet, PetVaccine, PetDocument, User, Reservation]),
+  ],
   controllers: [PetsController, AdminPetsController],
   providers: [PetsService],
   exports: [PetsService],

@@ -14,11 +14,12 @@ import {
   Req,
   Res,
   StreamableFile,
+  UploadedFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import {
   ApiBearerAuth,
@@ -40,7 +41,11 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { PetStatus } from '../../common/enums/pet-status.enum';
 import { fileHasExpectedSignature } from '../../common/utils/file-signature';
-import { removeUploadedFiles } from '../../common/utils/upload-cleanup';
+import { imageUploadOptions, saveImage } from '../../common/utils/image-upload';
+import {
+  removeUploadedFiles,
+  removeUploadUrls,
+} from '../../common/utils/upload-cleanup';
 import { JwtAuthGuard } from '../auth/guards/auth.guards';
 import type { AuthenticatedRequest } from '../auth/interfaces/auth.interface';
 import { AddVaccineDto } from './dto/add-vaccine.dto';
@@ -54,6 +59,9 @@ import {
   PetVaccineCreateResponseDto,
 } from './dto/pet-response.dto';
 import { PetsService } from './pets.service';
+
+const PET_PHOTO_DIRECTORY = 'pet-photos';
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 const documentUploadDirectory = join(process.cwd(), 'uploads', 'pet-documents');
 mkdirSync(documentUploadDirectory, { recursive: true });
@@ -133,9 +141,9 @@ export class PetsController {
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update pet draft (partial)',
+    summary: 'Update a pet (partial)',
     description:
-      'Send any subset of pet fields. Data accumulates across requests until submit. All fields are optional.',
+      'Send any subset of pet fields. Works for drafts, where data accumulates until submit, and for registered pets. All fields are optional.',
   })
   @ApiParam({ name: 'id', description: 'Pet UUID' })
   @ApiBody({
@@ -197,7 +205,9 @@ export class PetsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePetDto,
   ) {
-    return this.petsService.update(req.user.sub, id, dto);
+    return this.petsService.update(req.user.sub, id, dto, {
+      allowActive: true,
+    });
   }
 
   @Post(':id/vaccines')
@@ -326,14 +336,63 @@ export class PetsController {
     return this.petsService.submit(req.user.sub, id);
   }
 
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete a draft pet' })
+  @Post(':id/photo')
+  @ApiOperation({
+    summary: 'Upload or replace the pet photo',
+    description: 'One image (JPG, PNG or WEBP), up to 5MB.',
+  })
   @ApiParam({ name: 'id', description: 'Pet UUID' })
-  @ApiOkResponse({ type: PetDeleteResponseDto })
-  deleteDraft(
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['photo'],
+      properties: { photo: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiOkResponse({ type: PetResponseDto })
+  @UseInterceptors(
+    FileInterceptor('photo', imageUploadOptions(PHOTO_MAX_BYTES)),
+  )
+  async uploadPhoto(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    // 404 before anything is written to disk.
+    await this.petsService.findOneByOwner(req.user.sub, id);
+    const photoUrl = await saveImage(file, PET_PHOTO_DIRECTORY);
+    try {
+      return await this.petsService.setPhoto(req.user.sub, id, photoUrl);
+    } catch (error) {
+      await removeUploadUrls([photoUrl]);
+      throw error;
+    }
+  }
+
+  @Delete(':id/photo')
+  @ApiOperation({ summary: 'Remove the pet photo' })
+  @ApiParam({ name: 'id', description: 'Pet UUID' })
+  @ApiOkResponse({ type: PetResponseDto })
+  deletePhoto(
     @Req() req: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.petsService.deleteDraft(req.user.sub, id);
+    return this.petsService.removePhoto(req.user.sub, id);
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete a pet (draft or registered)',
+    description:
+      'Registered pets with an upcoming appointment cannot be deleted; cancel it first.',
+  })
+  @ApiParam({ name: 'id', description: 'Pet UUID' })
+  @ApiOkResponse({ type: PetDeleteResponseDto })
+  deletePet(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.petsService.deletePet(req.user.sub, id);
   }
 }

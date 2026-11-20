@@ -1,16 +1,19 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, MoreThanOrEqual, Repository } from 'typeorm';
+import { ReservationStatus } from '../../common/enums/admin-panel.enums';
 import { PetStatus } from '../../common/enums/pet-status.enum';
 import { ApproximateAge } from '../../common/enums/approximate-age.enum';
 import { PetType } from '../../common/enums/pet-type.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { removeUploadUrls } from '../../common/utils/upload-cleanup';
+import { Reservation } from '../reservations/entities/reservation.entity';
 import { User } from '../users/entities/user.entity';
 import { AddVaccineDto } from './dto/add-vaccine.dto';
 import { UpdatePetDto, validateAgeFields } from './dto/update-pet.dto';
@@ -49,6 +52,8 @@ export class PetsService {
     private readonly documentsRepository: Repository<PetDocument>,
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(Reservation)
+    private readonly reservationsRepository: Repository<Reservation>,
   ) {}
 
   async createDraft(ownerId: string, dto?: UpdatePetDto) {
@@ -299,13 +304,52 @@ export class PetsService {
     };
   }
 
-  async deleteDraft(ownerId: string, petId: string) {
+  /**
+   * Deletes a draft or a registered pet with its documents, photo and health
+   * records. A pet with an upcoming appointment must have it cancelled first;
+   * past reservations stay in the clinic's history without the pet link.
+   */
+  async deletePet(ownerId: string, petId: string) {
     const pet = await this.getOwnedPet(ownerId, petId, true);
-    if (pet.status !== PetStatus.DRAFT) {
-      throw new BadRequestException('فقط پیش‌نویس‌ها قابل حذف هستند');
+    if (pet.status === PetStatus.ACTIVE) {
+      const upcoming = await this.reservationsRepository.count({
+        where: {
+          petId,
+          status: In([ReservationStatus.PENDING, ReservationStatus.CONFIRMED]),
+          scheduledAt: MoreThanOrEqual(new Date()),
+        },
+      });
+      if (upcoming > 0) {
+        throw new ConflictException(
+          'این حیوان خانگی نوبت فعال دارد؛ ابتدا نوبت‌ها را لغو کنید',
+        );
+      }
     }
     await this.removePet(pet);
-    return { message: 'پیش‌نویس حذف شد' };
+    return {
+      message:
+        pet.status === PetStatus.DRAFT
+          ? 'پیش‌نویس حذف شد'
+          : 'حیوان خانگی حذف شد',
+    };
+  }
+
+  /** Sets (or replaces) the pet's photo; the previous file is deleted. */
+  async setPhoto(ownerId: string, petId: string, photoUrl: string) {
+    const pet = await this.getOwnedPet(ownerId, petId);
+    const previous = pet.photoUrl;
+    await this.petsRepository.update(petId, { photoUrl });
+    await this.removeFilesQuietly(previous ? [previous] : [], petId);
+    return this.findOneByOwner(ownerId, petId);
+  }
+
+  async removePhoto(ownerId: string, petId: string) {
+    const pet = await this.getOwnedPet(ownerId, petId);
+    if (pet.photoUrl) {
+      await this.petsRepository.update(petId, { photoUrl: null });
+      await this.removeFilesQuietly([pet.photoUrl], petId);
+    }
+    return this.findOneByOwner(ownerId, petId);
   }
 
   async adminFindAll(userId: string, status?: PetStatus) {
@@ -357,13 +401,23 @@ export class PetsService {
 
   private async removePet(pet: Pet) {
     await this.petsRepository.remove(pet);
+    await this.removeFilesQuietly(
+      [
+        ...(pet.documents?.map((document) => document.fileUrl) ?? []),
+        ...(pet.photoUrl ? [pet.photoUrl] : []),
+      ],
+      pet.id,
+    );
+  }
+
+  /** A leftover file is not worth failing a request that already succeeded. */
+  private async removeFilesQuietly(urls: string[], petId: string) {
+    if (urls.length === 0) return;
     try {
-      await removeUploadUrls(
-        pet.documents?.map((document) => document.fileUrl) ?? [],
-      );
+      await removeUploadUrls(urls);
     } catch (error) {
       this.logger.warn(
-        `Pet ${pet.id} was deleted but one or more files could not be removed`,
+        `Pet ${petId}: one or more files could not be removed`,
         error instanceof Error ? error.stack : undefined,
       );
     }
@@ -445,6 +499,7 @@ export class PetsService {
     return {
       id: pet.id,
       status: pet.status,
+      photoUrl: pet.photoUrl,
       name: pet.name,
       type: pet.type,
       typeLabel: pet.type ? PET_TYPE_LABELS[pet.type] : null,
