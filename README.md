@@ -89,6 +89,47 @@ See `.env.example` for all options. Key variables:
 | `CORS_ORIGINS` | Comma-separated allowed frontend origins |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `NODE_ENV` | `development` enables the mock SMS provider and the sandbox payment gateway |
+| `APP_URL` | Public URL of this API as the browser reaches it (payment callbacks, sandbox page). With Docker: `http://localhost:4000` |
+| `PUBLIC_SITE_URL` | Frontend base for share links and the payment result redirect; falls back to the origin of `FRONTEND_REDIRECT_URL`, then the first `CORS_ORIGINS` entry |
+
+## Development seed
+
+`src/seeds/dev-seed.ts` fills a development database with two clinics (with
+gallery images), four vets, services, working hours, approved reviews, and a
+demo owner with pets and reservations: a completed, unreviewed visit (to test
+reviews) and an upcoming unpaid one (to test payment). It is idempotent and
+refuses to run with `NODE_ENV=production`.
+
+```bash
+npm run seed:dev                                          # from source
+docker exec petzi-backend-api-1 node dist/seeds/dev-seed.js   # in the API container
+```
+
+Log in as the demo owner with `09120000000`; the OTP is printed by the mock
+SMS provider in the API logs (requires `NODE_ENV=development`).
+
+## Payments
+
+Gateways implement `PaymentGatewayProvider`
+(`src/modules/payments/gateways/gateway.types.ts`) and are picked by
+`PaymentGatewayService` from the admin payment-gateway settings. Shipped:
+`zarinpal`, plus development-only `sandbox` and `mock`, which production never
+uses. To add a real gateway, implement the interface, register it in
+`PaymentsModule` and the service's provider map, and enable it in settings.
+
+With no real gateway enabled, development uses the sandbox: a payment page at
+`GET /api/v1/payments/sandbox/:authority` with "pay" and "cancel" buttons
+(sessions are in memory; 404 in production).
+
+Reservation flow:
+
+1. `POST /api/v1/reservations/:id/checkout` → `{ redirectUrl }`; send the payer there.
+2. The gateway returns to `GET /api/v1/reservations/payments/callback`, which
+   verifies the payment and redirects to the frontend
+   `/services/payment?status=success|failed&reservationId=…`.
+3. Reservation list and detail include `paymentStatus`
+   (`unpaid|pending|paid|refunded`) and `canPay`.
 
 ## API Endpoints
 
@@ -183,3 +224,4 @@ src/
 | `npm run build` | Compile TypeScript |
 | `npm run start:prod` | Run compiled app |
 | `npm run test` | Run unit tests |
+| `npm run seed:dev` | Seed development data (not in production) |

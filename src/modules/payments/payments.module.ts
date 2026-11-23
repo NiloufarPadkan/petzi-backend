@@ -9,20 +9,23 @@ import { AdminPaymentsController } from './admin-payments.controller';
 import { Payment } from './entities/payment.entity';
 import { PaymentGatewayService } from './gateways/payment-gateway.service';
 import { MockProvider } from './gateways/mock.provider';
+import { SandboxProvider } from './gateways/sandbox.provider';
 import { ZarinpalProvider } from './gateways/zarinpal.provider';
 import { PaymentsService } from './payments.service';
+import { SandboxPaymentController } from './sandbox-payment.controller';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Payment, User, Reservation, PremiumPlan, Clinic]),
     SettingsModule,
   ],
-  controllers: [AdminPaymentsController],
+  controllers: [AdminPaymentsController, SandboxPaymentController],
   providers: [
     PaymentsService,
     PaymentGatewayService,
     ZarinpalProvider,
     MockProvider,
+    SandboxProvider,
   ],
   exports: [PaymentGatewayService],
 })

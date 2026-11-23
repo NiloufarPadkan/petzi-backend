@@ -24,7 +24,9 @@
     "migration:create": "typeorm-ts-node-commonjs migration:create",
     "migration:run": "npm run typeorm -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert",
-    "migration:run:prod": "typeorm migration:run -d dist/config/data-source.js"
+    "migration:run:prod": "typeorm migration:run -d dist/config/data-source.js",
+    "seed:dev": "ts-node -r tsconfig-paths/register src/seeds/dev-seed.ts",
+    "seed:dev:dist": "node dist/seeds/dev-seed.js"
   },
   "engines": {
     "node": ">=20"

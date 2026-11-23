@@ -18,6 +18,8 @@ describe('AuthService registration token flow', () => {
     findByPhone: jest.fn(),
     findByEmail: jest.fn(),
     create: jest.fn(),
+    // buildAuthResponse records lastLoginAt.
+    update: jest.fn(),
   };
   const otpService = {
     verifyOtp: jest.fn(),

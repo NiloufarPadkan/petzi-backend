@@ -20,14 +20,19 @@ import {
   CreateBookingDto,
   CreateReviewDto,
   QueryMyReservationsDto,
+  ReservationCheckoutDto,
 } from './dto/booking.dto';
+import { ReservationPaymentsService } from './reservation-payments.service';
 
 @ApiTags('My Reservations')
 @ApiBearerAuth('JWT')
 @UseGuards(JwtAuthGuard)
 @Controller('reservations')
 export class BookingsController {
-  constructor(private readonly bookingsService: BookingsService) {}
+  constructor(
+    private readonly bookingsService: BookingsService,
+    private readonly paymentsService: ReservationPaymentsService,
+  ) {}
 
   @Post()
   @ApiOperation({
@@ -63,6 +68,20 @@ export class BookingsController {
     @Body() dto: CancelBookingDto,
   ) {
     return this.bookingsService.cancel(req.user.sub, id, dto.reason);
+  }
+
+  @Post(':id/checkout')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Start paying for a reservation; open the returned redirectUrl (dev: sandbox page)',
+  })
+  checkout(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReservationCheckoutDto,
+  ) {
+    return this.paymentsService.checkout(req.user.sub, id, dto.gateway);
   }
 
   @Get(':id/rebook')

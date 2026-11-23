@@ -80,3 +80,15 @@ export class CreateReviewDto {
   @MaxLength(2000)
   comment: string;
 }
+
+export class ReservationCheckoutDto {
+  @ApiPropertyOptional({
+    example: 'zarinpal',
+    description:
+      'Defaults to the first enabled gateway; in development "sandbox" opens the test payment page',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  gateway?: string;
+}

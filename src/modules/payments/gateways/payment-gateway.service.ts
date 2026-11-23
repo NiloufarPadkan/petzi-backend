@@ -15,7 +15,11 @@ import type {
   PaymentGatewayProvider,
 } from './gateway.types';
 import { MockProvider } from './mock.provider';
+import { SandboxProvider } from './sandbox.provider';
 import { ZarinpalProvider } from './zarinpal.provider';
+
+/** Gateways that only exist for development and tests. */
+const DEV_ONLY_GATEWAYS = new Set(['sandbox', 'mock']);
 
 interface ConfiguredGateway {
   code: string;
@@ -26,8 +30,10 @@ interface ConfiguredGateway {
 
 /**
  * Picks a payment provider from the admin "payment gateways" settings. With
- * nothing enabled, development falls back to the mock provider; production
- * refuses to take payments.
+ * nothing enabled, development falls back to the sandbox gateway (a real
+ * approve/cancel page); production refuses to take payments. `sandbox` and
+ * `mock` can be requested explicitly in development and never in production.
+ * New real gateways implement PaymentGatewayProvider and are registered here.
  */
 @Injectable()
 export class PaymentGatewayService {
@@ -38,8 +44,11 @@ export class PaymentGatewayService {
     private readonly configService: ConfigService,
     zarinpal: ZarinpalProvider,
     mock: MockProvider,
+    sandbox: SandboxProvider,
   ) {
-    this.providers = new Map([zarinpal, mock].map((p) => [p.code, p]));
+    this.providers = new Map(
+      [zarinpal, mock, sandbox].map((p) => [p.code, p]),
+    );
   }
 
   async initiate(
@@ -68,12 +77,22 @@ export class PaymentGatewayService {
     const production =
       this.configService.get<string>('nodeEnv') === 'production';
 
-    const enabled = gateways.filter((g) => g.enabled);
+    const enabled = gateways.filter(
+      (g) => g.enabled && !(production && DEV_ONLY_GATEWAYS.has(g.code)),
+    );
+    const devRequest =
+      !!requestedCode && DEV_ONLY_GATEWAYS.has(requestedCode);
     const chosen = requestedCode
       ? enabled.find((g) => g.code === requestedCode)
       : enabled[0];
 
-    if (requestedCode && !chosen && requestedCode !== 'mock') {
+    if (devRequest && !production && !chosen) {
+      return {
+        provider: this.providers.get(requestedCode)!,
+        settings: { code: requestedCode, sandbox: true } satisfies GatewaySettings,
+      };
+    }
+    if (requestedCode && !chosen) {
       throw new BadRequestException('درگاه انتخاب‌شده فعال نیست');
     }
     if (chosen) {
@@ -98,8 +117,8 @@ export class PaymentGatewayService {
       );
     }
     return {
-      provider: this.providers.get('mock')!,
-      settings: { code: 'mock', sandbox: true } satisfies GatewaySettings,
+      provider: this.providers.get('sandbox')!,
+      settings: { code: 'sandbox', sandbox: true } satisfies GatewaySettings,
     };
   }
 }

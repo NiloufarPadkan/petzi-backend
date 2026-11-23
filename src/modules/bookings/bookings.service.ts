@@ -27,6 +27,7 @@ import {
   CreateReviewDto,
   QueryMyReservationsDto,
 } from './dto/booking.dto';
+import { ReservationPaymentsService } from './reservation-payments.service';
 
 const ACTIVE = [ReservationStatus.PENDING, ReservationStatus.CONFIRMED];
 
@@ -57,6 +58,7 @@ export class BookingsService {
     private readonly providersService: ProvidersService,
     private readonly availabilityService: AvailabilityService,
     private readonly notificationsService: NotificationsService,
+    private readonly reservationPayments: ReservationPaymentsService,
   ) {}
 
   /**
@@ -155,9 +157,15 @@ export class BookingsService {
       .skip((query.page - 1) * query.limit)
       .take(query.limit)
       .getManyAndCount();
-    const clinics = await this.loadClinics(reservations);
+    const [clinics, payments] = await Promise.all([
+      this.loadClinics(reservations),
+      this.reservationPayments.stateFor(reservations),
+    ]);
     return paginated(
-      reservations.map((r) => this.toListItem(r, clinics)),
+      reservations.map((r) => ({
+        ...this.toListItem(r, clinics),
+        ...payments.get(r.id)!,
+      })),
       total,
       query,
     );
@@ -170,13 +178,14 @@ export class BookingsService {
     });
     if (!reservation) throw new NotFoundException('رزرو یافت نشد');
 
-    const [clinics, events, review] = await Promise.all([
+    const [clinics, events, review, payments] = await Promise.all([
       this.loadClinics([reservation]),
       this.eventsRepository.find({
         where: { reservationId: id },
         order: { createdAt: 'ASC' },
       }),
       this.findReview(reservation),
+      this.reservationPayments.stateFor([reservation]),
     ]);
     const clinic = reservation.clinicId
       ? clinics.get(reservation.clinicId)
@@ -184,6 +193,7 @@ export class BookingsService {
 
     return {
       ...this.toListItem(reservation, clinics),
+      ...payments.get(reservation.id)!,
       serviceDescription: reservation.serviceDescription,
       cancelReason: reservation.cancelReason,
       clinicNote: reservation.clinicNote,
