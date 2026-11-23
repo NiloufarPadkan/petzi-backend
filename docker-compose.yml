@@ -27,6 +27,8 @@ services:
       postgres:
         condition: service_healthy
     ports:
+      # Host PORT → container 3000. APP_URL below must use this same host port
+      # or the sandbox payment page redirect will hit a dead origin.
       - "${PORT:-3000}:3000"
     env_file:
       - path: .env
@@ -34,6 +36,9 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
+      # Browser-facing API origin (sandbox page + payment callbacks). Defaults to
+      # the published host port when APP_URL is unset in .env.
+      APP_URL: ${APP_URL:-http://localhost:${PORT:-3000}}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: ${DB_USERNAME:-postgres}
