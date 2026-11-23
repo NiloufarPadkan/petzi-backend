@@ -47,6 +47,18 @@ class ProviderQueryBase extends PaginationQueryDto {
   minRating?: number;
 
   @ApiPropertyOptional({
+    minimum: 0,
+    maximum: 5,
+    description: 'Upper bound of the approved-review average (inclusive)',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  maxRating?: number;
+
+  @ApiPropertyOptional({
     description: 'Toman; providers with a service ≥ this',
   })
   @IsOptional()

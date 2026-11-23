@@ -38,6 +38,10 @@ import {
   QueryVetsDto,
 } from './dto/providers.dto';
 import { FavoriteProvider } from './entities/favorite.entity';
+import {
+  buildProviderShareUrl,
+  ProviderShareKind,
+} from './provider-share-url';
 
 // Correlated sub-selects keep list queries to one round trip.
 const VET_RATING_SQL = `(SELECT COALESCE(AVG(rv.rating), 0) FROM vet_reviews rv WHERE rv."vetId" = vet."userId" AND rv.status = 'approved')`;
@@ -169,7 +173,7 @@ export class ProvidersService {
         longitude,
         clinic?.address ?? vet.clinicAddress,
       ),
-      shareUrl: this.shareUrl('vets', vetId),
+      shareUrl: this.shareUrl('vet', vetId),
     };
   }
 
@@ -316,7 +320,7 @@ export class ProvidersService {
         clinic.longitude,
         clinic.address,
       ),
-      shareUrl: this.shareUrl('clinics', clinicId),
+      shareUrl: this.shareUrl('clinic', clinicId),
     };
   }
 
@@ -336,22 +340,39 @@ export class ProvidersService {
 
   // ---- frequent & favorites ----
 
-  /** The vets this owner booked most often. */
+  /**
+   * The vets this owner booked most often, with the last completed visit and
+   * the newest non-cancelled reservation (for "reserve again").
+   */
   async frequent(userId: string) {
     const rows = await this.reservationsRepository
       .createQueryBuilder('r')
       .select('r.vetId', 'vetId')
       .addSelect('COUNT(*)', 'count')
       .addSelect('MAX(r.scheduledAt)', 'last')
+      .addSelect(
+        'MAX(r."scheduledAt") FILTER (WHERE r.status = :completed)',
+        'lastVisitAt',
+      )
+      .addSelect(
+        '(ARRAY_AGG(r.id ORDER BY r."scheduledAt" DESC))[1]',
+        'lastReservationId',
+      )
       .where('r.ownerId = :userId AND r.vetId IS NOT NULL', { userId })
       .andWhere('r.status != :cancelled', {
         cancelled: ReservationStatus.CANCELLED,
       })
+      .setParameter('completed', ReservationStatus.COMPLETED)
       .groupBy('r.vetId')
       .orderBy('count', 'DESC')
       .addOrderBy('last', 'DESC')
       .limit(10)
-      .getRawMany<{ vetId: string; count: string }>();
+      .getRawMany<{
+        vetId: string;
+        count: string;
+        lastVisitAt: Date | string | null;
+        lastReservationId: string | null;
+      }>();
     if (rows.length === 0) return [];
 
     const ids = rows.map((row) => row.vetId);
@@ -370,7 +391,18 @@ export class ProvidersService {
     );
     return rows.flatMap((row) => {
       const item = byId.get(row.vetId);
-      return item ? [{ ...item, visitCount: Number(row.count) }] : [];
+      return item
+        ? [
+            {
+              ...item,
+              visitCount: Number(row.count),
+              lastVisitAt: row.lastVisitAt
+                ? new Date(row.lastVisitAt).toISOString()
+                : null,
+              lastReservationId: row.lastReservationId,
+            },
+          ]
+        : [];
     });
   }
 
@@ -444,10 +476,7 @@ export class ProvidersService {
         : (await this.clinicsRepository.findOne({ where: { userId: id } }))
             ?.name;
     if (!name) throw new NotFoundException('مورد یافت نشد');
-    const url = this.shareUrl(
-      type === FavoriteType.VET ? 'vets' : 'clinics',
-      id,
-    );
+    const url = this.shareUrl(type === FavoriteType.VET ? 'vet' : 'clinic', id);
     return { title: name, text: `${name} در پتزی`, url };
   }
 
@@ -499,11 +528,7 @@ export class ProvidersService {
       });
     if (query.clinicId)
       qb.andWhere('vet.clinicId = :clinicId', { clinicId: query.clinicId });
-    if (query.minRating !== undefined) {
-      qb.andWhere(`${VET_RATING_SQL} >= :minRating`, {
-        minRating: query.minRating,
-      });
-    }
+    this.applyRatingRange(qb, query, VET_RATING_SQL);
     this.applyPriceRange(qb, query, 'vet_services', 'vet."userId"', 'vetId');
     if (query.favoritesOnly) {
       qb.andWhere(
@@ -526,11 +551,7 @@ export class ProvidersService {
       );
     }
     if (query.city) qb.andWhere('clinic.city = :city', { city: query.city });
-    if (query.minRating !== undefined) {
-      qb.andWhere(`${CLINIC_RATING_SQL} >= :minRating`, {
-        minRating: query.minRating,
-      });
-    }
+    this.applyRatingRange(qb, query, CLINIC_RATING_SQL);
     this.applyPriceRange(
       qb,
       query,
@@ -545,6 +566,29 @@ export class ProvidersService {
       );
     }
     return qb;
+  }
+
+  /** Inclusive bounds on the approved-review average; unrated providers average 0. */
+  private applyRatingRange(
+    qb: SelectQueryBuilder<VetProfile> | SelectQueryBuilder<Clinic>,
+    query: { minRating?: number; maxRating?: number },
+    ratingSql: string,
+  ) {
+    const { minRating, maxRating } = query;
+    if (
+      minRating !== undefined &&
+      maxRating !== undefined &&
+      minRating > maxRating
+    ) {
+      throw new BadRequestException(
+        'حداقل امتیاز نمی‌تواند بیشتر از حداکثر امتیاز باشد',
+      );
+    }
+    const q = qb as SelectQueryBuilder<ObjectLiteral>;
+    if (minRating !== undefined)
+      q.andWhere(`${ratingSql} >= :minRating`, { minRating });
+    if (maxRating !== undefined)
+      q.andWhere(`${ratingSql} <= :maxRating`, { maxRating });
   }
 
   private applyPriceRange(
@@ -812,8 +856,13 @@ export class ProvidersService {
     };
   }
 
-  private shareUrl(kind: 'vets' | 'clinics', id: string): string | null {
-    const base = this.configService.get<string>('publicSiteUrl');
-    return base ? `${base.replace(/\/$/, '')}/${kind}/${id}` : null;
+  private shareUrl(kind: ProviderShareKind, id: string): string {
+    return buildProviderShareUrl(kind, id, {
+      publicSiteUrl: this.configService.get<string>('publicSiteUrl'),
+      frontendRedirectUrl: this.configService.get<string>(
+        'frontend.redirectUrl',
+      ),
+      corsOrigins: this.configService.get<string[]>('cors.origins'),
+    });
   }
 }
