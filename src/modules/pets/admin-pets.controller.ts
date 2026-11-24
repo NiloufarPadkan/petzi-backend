@@ -32,6 +32,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { PetStatus } from '../../common/enums/pet-status.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { decodeMultipartFilename } from '../../common/utils/multipart-filename';
 import { JwtAuthGuard } from '../auth/guards/auth.guards';
 import { CreatePetDto, UpdatePetDto } from './dto/update-pet.dto';
 import {
@@ -142,7 +143,7 @@ export class AdminPetsController {
 
     response.set({
       'Content-Type': document.mimeType,
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(document.originalName)}`,
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(decodeMultipartFilename(document.originalName))}`,
     });
 
     return new StreamableFile(createReadStream(path));

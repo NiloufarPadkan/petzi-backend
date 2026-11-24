@@ -42,6 +42,7 @@ import { join } from 'node:path';
 import { PetStatus } from '../../common/enums/pet-status.enum';
 import { fileHasExpectedSignature } from '../../common/utils/file-signature';
 import { imageUploadOptions, saveImage } from '../../common/utils/image-upload';
+import { decodeMultipartFilename } from '../../common/utils/multipart-filename';
 import {
   removeUploadedFiles,
   removeUploadUrls,
@@ -315,7 +316,7 @@ export class PetsController {
 
     response.set({
       'Content-Type': document.mimeType,
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(document.originalName)}`,
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(decodeMultipartFilename(document.originalName))}`,
     });
 
     return new StreamableFile(createReadStream(path));

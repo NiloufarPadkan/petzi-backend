@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { ApprovalStatus } from '../../common/enums/approval-status.enum';
+import { decodeMultipartFilename } from '../../common/utils/multipart-filename';
 import { removeUploadUrls } from '../../common/utils/upload-cleanup';
 import {
   RejectVetDocumentsDto,
@@ -41,7 +42,7 @@ export class VetDocumentsService {
       this.documentsRepository.create({
         vetId,
         title,
-        originalName: file.originalname,
+        originalName: decodeMultipartFilename(file.originalname),
         fileUrl: `/uploads/vet-documents/${file.filename}`,
         mimeType: file.mimetype,
         sizeBytes: file.size,
@@ -144,7 +145,7 @@ export class VetDocumentsService {
     return {
       id: document.id,
       title: document.title,
-      originalName: document.originalName,
+      originalName: decodeMultipartFilename(document.originalName),
       fileUrl: `/api/v1/admin/vets/${document.vetId}/documents/${document.id}/download`,
       mimeType: document.mimeType,
       sizeBytes: document.sizeBytes,

@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 import { SurgeryStatus } from '../../common/enums/owner-app.enums';
+import { decodeMultipartFilename } from '../../common/utils/multipart-filename';
 import { addDays, tehranToday } from '../../common/utils/tehran-time';
 import { removeUploadUrls } from '../../common/utils/upload-cleanup';
 import { PetDocument } from '../pets/entities/pet-document.entity';
@@ -589,7 +590,7 @@ export class PetHealthService {
           kind: 'document' as const,
           id: d.id,
           at: d.createdAt,
-          title: d.originalName,
+          title: decodeMultipartFilename(d.originalName),
           subtitle: null,
           data: { mimeType: d.mimeType },
         })),
