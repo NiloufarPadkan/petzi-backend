@@ -26,7 +26,9 @@
     "migration:revert": "npm run typeorm -- migration:revert",
     "migration:run:prod": "typeorm migration:run -d dist/config/data-source.js",
     "seed:dev": "ts-node -r tsconfig-paths/register src/seeds/dev-seed.ts",
-    "seed:dev:dist": "node dist/seeds/dev-seed.js"
+    "seed:dev:dist": "node dist/seeds/dev-seed.js",
+    "seed:fill-pets": "ts-node -r tsconfig-paths/register src/seeds/fill-pet-mock-data.ts",
+    "seed:fill-pets:dist": "node dist/seeds/fill-pet-mock-data.js"
   },
   "engines": {
     "node": ">=20"

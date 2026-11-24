@@ -1,10 +1,12 @@
 /**
  * Development seed: clinics, vets, services, hours, gallery images, approved
- * reviews, and a demo owner with pets and reservations, so every owner-app
- * screen has real API data. Idempotent (fixed ids, ON CONFLICT DO NOTHING).
+ * reviews, demo/reviewer pets with weight/vaccine/med/event history, and
+ * reservations, so every owner-app screen (including charts) has real API data.
+ * Idempotent (fixed ids, ON CONFLICT DO NOTHING).
  *
  *   npm run seed:dev                      # from source (needs DB access)
  *   docker exec petzi-backend-api-1 node dist/seeds/dev-seed.js
+ *   npm run seed:fill-pets                # enrich ALL active pets in the DB
  *
  * Demo owner login: 09120000000 (OTP is logged by the mock SMS provider).
  * Refuses to run when NODE_ENV=production.
@@ -292,11 +294,145 @@ async function main() {
       ),
     );
 
-    // ---- demo owner pets & reservations ----
-    const pets = [id(9, 1), id(9, 2)];
+    // ---- demo owner + reviewer pets ----
+    const pets = [
+      id(9, 1),
+      id(9, 2),
+      id(9, 3),
+      id(9, 4),
+      id(9, 5),
+      id(9, 6),
+      id(9, 7),
+      id(9, 8),
+    ];
+    const ymd = (daysAgo: number) => {
+      const d = new Date();
+      d.setUTCHours(12, 0, 0, 0);
+      d.setUTCDate(d.getUTCDate() - daysAgo);
+      return d.toISOString().slice(0, 10);
+    };
+    const petRow = (
+      n: number,
+      ownerId: string,
+      name: string,
+      type: string,
+      breed: string,
+      gender: string,
+      birthDate: string,
+      weight: number,
+      height: number,
+      healthStatus: string,
+      vaccinationStatus: string,
+      allergies: string,
+      underlyingDiseases: string,
+      foodType: string,
+      foodBrand: string,
+      mealsPerDay: string,
+    ) => ({
+      id: pets[n],
+      ownerId,
+      status: 'active',
+      name,
+      type,
+      breed,
+      gender,
+      birthDate,
+      weight,
+      height,
+      healthStatus,
+      vaccinationStatus,
+      allergies,
+      underlyingDiseases,
+      medications: 'None',
+      healthNotes: null,
+      foodType,
+      foodBrand,
+      mealsPerDay,
+      foodSensitivities: 'None',
+      lastDewormingDate: ymd(45 + n * 7),
+      dewormingType: 'خوراکی',
+      createdAt: now,
+      updatedAt: now,
+    });
     await insert(runner, 'pets', [
-      { id: pets[0], ownerId: owner, status: 'active', name: 'پیشی', type: 'cat', breed: 'پرشین', gender: 'female', birthDate: '2022-03-10', weight: 4.2, vaccinationStatus: 'complete', createdAt: now, updatedAt: now },
-      { id: pets[1], ownerId: owner, status: 'active', name: 'رکس', type: 'dog', breed: 'ژرمن شپرد', gender: 'male', birthDate: '2020-07-01', weight: 31, vaccinationStatus: 'in_progress', createdAt: now, updatedAt: now },
+      petRow(0, owner, 'پیشی', 'cat', 'پرشین', 'female', '2022-03-10', 4.2, 24, 'excellent', 'complete', 'ندارد', 'ندارد', 'dry', 'رویال کنین', '2'),
+      petRow(1, owner, 'رکس', 'dog', 'ژرمن شپرد', 'male', '2020-07-01', 31, 62, 'good', 'in_progress', 'حساسیت به گرده', 'درماتیت خفیف', 'mixed', 'هیلز', '2'),
+      petRow(2, reviewers[0], 'میشو', 'cat', 'دشمیر', 'female', '2021-11-02', 4.5, 23, 'good', 'complete', 'پنی‌سیلین', 'عفونت گوش مزمن', 'wet', 'ویسکاس', '3'),
+      petRow(3, reviewers[1], 'لونا', 'dog', 'پودل', 'female', '2019-05-18', 7.5, 35, 'excellent', 'complete', 'ندارد', 'ندارد', 'dry', 'اکنون', '2'),
+      petRow(4, reviewers[2], 'تدی', 'dog', 'گلدن رتریور', 'male', '2018-09-09', 29, 56, 'average', 'in_progress', 'غذای حاوی سویا', 'دیسپلازی خفیف لگن', 'homemade', 'غذای خانگی', '2'),
+      petRow(5, owner, 'کوکی', 'rabbit', 'لوپ', 'female', '2023-01-15', 1.8, 18, 'good', 'complete', 'ندارد', 'ندارد', 'mixed', 'ورسل‌لاگا', '3'),
+      petRow(6, reviewers[0], 'زرد', 'bird', 'کاکادو', 'male', '2021-04-22', 0.42, 35, 'good', 'complete', 'ندارد', 'ندارد', 'mixed', 'ورسل‌لاگا', 'more'),
+      petRow(7, reviewers[1], 'سیمبا', 'cat', 'اسکاتیش', 'male', '2022-08-08', 5.1, 26, 'needs_checkup', 'none', 'گرده گل', 'آسم گربه‌ای مشکوک', 'dry', 'پروی‌پلن', '2'),
+    ]);
+
+    // Weight histories (charts) — varied curves across ~11 months.
+    const weightCurve = (pet: number, base: number, kind: 'rise' | 'fall' | 'stable' | 'dip' | 'peak') => {
+      const count = 10;
+      const rows = [];
+      for (let i = 0; i < count; i++) {
+        const t = i / (count - 1);
+        const daysAgo = Math.round(330 * (1 - t));
+        let factor = 1;
+        if (kind === 'rise') factor = 0.9 + 0.18 * t;
+        else if (kind === 'fall') factor = 1.12 - 0.16 * t;
+        else if (kind === 'stable') factor = 1 + Math.sin(t * Math.PI * 4) * 0.03;
+        else if (kind === 'dip') factor = 1 - 0.12 * Math.sin(t * Math.PI);
+        else factor = 0.95 + 0.18 * Math.sin(t * Math.PI);
+        rows.push({
+          id: id(14, pet * 20 + i + 1),
+          petId: pets[pet],
+          weightKg: Math.max(0.05, Math.round(base * factor * 100) / 100),
+          measuredAt: ymd(daysAgo),
+          note: i === count - 1 ? 'آخرین اندازه‌گیری' : null,
+          createdAt: now,
+        });
+      }
+      return rows;
+    };
+    await insert(runner, 'pet_weights', [
+      ...weightCurve(0, 4.2, 'stable'),
+      ...weightCurve(1, 31, 'fall'),
+      ...weightCurve(2, 4.5, 'rise'),
+      ...weightCurve(3, 7.5, 'dip'),
+      ...weightCurve(4, 29, 'peak'),
+      ...weightCurve(5, 1.8, 'stable'),
+      ...weightCurve(6, 0.42, 'rise'),
+      ...weightCurve(7, 5.1, 'dip'),
+    ]);
+
+    await insert(runner, 'pet_vaccines', [
+      { id: id(15, 1), petId: pets[0], vaccineName: 'سه‌گانه گربه', vaccineDate: ymd(200), nextDueDate: ymd(-165), notes: 'نوبت سالانه', createdAt: now },
+      { id: id(15, 2), petId: pets[0], vaccineName: 'هاری', vaccineDate: ymd(200), nextDueDate: ymd(-165), notes: null, createdAt: now },
+      { id: id(15, 3), petId: pets[1], vaccineName: 'DHPP', vaccineDate: ymd(90), nextDueDate: ymd(-5), notes: 'بوستر به‌زودی', createdAt: now },
+      { id: id(15, 4), petId: pets[1], vaccineName: 'هاری', vaccineDate: ymd(400), nextDueDate: ymd(20), notes: 'عقب‌افتاده', createdAt: now },
+      { id: id(15, 5), petId: pets[2], vaccineName: 'سه‌گانه گربه', vaccineDate: ymd(120), nextDueDate: ymd(-245), notes: null, createdAt: now },
+      { id: id(15, 6), petId: pets[3], vaccineName: 'DHPP', vaccineDate: ymd(180), nextDueDate: ymd(-185), notes: null, createdAt: now },
+      { id: id(15, 7), petId: pets[4], vaccineName: 'هاری', vaccineDate: ymd(400), nextDueDate: ymd(10), notes: 'نیاز به تمدید', createdAt: now },
+      { id: id(15, 8), petId: pets[5], vaccineName: 'Myxo-RHD', vaccineDate: ymd(150), nextDueDate: ymd(-215), notes: null, createdAt: now },
+      { id: id(15, 9), petId: pets[7], vaccineName: 'سه‌گانه گربه', vaccineDate: ymd(10), nextDueDate: ymd(-20), notes: 'شروع دوره', createdAt: now },
+    ]);
+
+    await insert(runner, 'pet_medications', [
+      { id: id(16, 1), petId: pets[1], name: 'آتوپیکا', dosage: '۵۰ میلی‌گرم', frequency: 'روزانه یک عدد', startDate: ymd(45), endDate: null, notes: null, isActive: true, createdAt: now, updatedAt: now },
+      { id: id(16, 2), petId: pets[2], name: 'اوتوماکس', dosage: '۲ قطره', frequency: 'دو بار در روز', startDate: ymd(14), endDate: ymd(-1), notes: null, isActive: true, createdAt: now, updatedAt: now },
+      { id: id(16, 3), petId: pets[4], name: 'گلوکوزامین', dosage: '۵۰۰ میلی‌گرم', frequency: 'روزانه', startDate: ymd(120), endDate: null, notes: null, isActive: true, createdAt: now, updatedAt: now },
+      { id: id(16, 4), petId: pets[7], name: 'فلوتیکازون', dosage: '۱ پاف', frequency: 'دو بار در روز', startDate: ymd(21), endDate: null, notes: null, isActive: true, createdAt: now, updatedAt: now },
+    ]);
+
+    await insert(runner, 'pet_events', [
+      { id: id(17, 1), petId: pets[0], type: 'grooming', title: 'آرایش و کوتاهی ناخن', note: null, eventAt: days(-20), createdAt: now, updatedAt: now },
+      { id: id(17, 2), petId: pets[1], type: 'vet_visit', title: 'معاینه پوست', note: 'بهبود نسبی', eventAt: days(-30), createdAt: now, updatedAt: now },
+      { id: id(17, 3), petId: pets[2], type: 'illness', title: 'عفونت گوش', note: 'شروع درمان', eventAt: days(-14), createdAt: now, updatedAt: now },
+      { id: id(17, 4), petId: pets[3], type: 'training', title: 'کلاس اطاعت‌پذیری', note: null, eventAt: days(-12), createdAt: now, updatedAt: now },
+      { id: id(17, 5), petId: pets[4], type: 'injury', title: 'کشیدگی خفیف پا', note: 'استراحت یک هفته', eventAt: days(-45), createdAt: now, updatedAt: now },
+      { id: id(17, 6), petId: pets[5], type: 'grooming', title: 'کوتاهی ناخن', note: null, eventAt: days(-18), createdAt: now, updatedAt: now },
+      { id: id(17, 7), petId: pets[6], type: 'vet_visit', title: 'معاینه پر و پوست', note: null, eventAt: days(-80), createdAt: now, updatedAt: now },
+      { id: id(17, 8), petId: pets[7], type: 'illness', title: 'سرفه شبانه', note: null, eventAt: days(-25), createdAt: now, updatedAt: now },
+    ]);
+
+    await insert(runner, 'pet_surgeries', [
+      { id: id(18, 1), petId: pets[3], name: 'عقیم‌سازی', surgeryDate: ymd(900), vetName: 'دکتر سارا احمدی', clinicName: 'کلینیک دامپزشکی آوا', notes: null, status: 'done', createdAt: now, updatedAt: now },
+      { id: id(18, 2), petId: pets[4], name: 'جراحی دندان', surgeryDate: ymd(200), vetName: 'دکتر نیما موسوی', clinicName: 'مطب خصوصی', notes: null, status: 'done', createdAt: now, updatedAt: now },
     ]);
     const reservation = (
       n: number,
