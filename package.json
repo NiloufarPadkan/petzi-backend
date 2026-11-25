@@ -28,7 +28,8 @@
     "seed:dev": "ts-node -r tsconfig-paths/register src/seeds/dev-seed.ts",
     "seed:dev:dist": "node dist/seeds/dev-seed.js",
     "seed:fill-pets": "ts-node -r tsconfig-paths/register src/seeds/fill-pet-mock-data.ts",
-    "seed:fill-pets:dist": "node dist/seeds/fill-pet-mock-data.js"
+    "seed:fill-pets:dist": "node dist/seeds/fill-pet-mock-data.js",
+    "seed:admin-auth": "ts-node -r tsconfig-paths/register src/seeds/admin-auth-seed.ts"
   },
   "engines": {
     "node": ">=20"

@@ -40,6 +40,11 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { GoogleExchangeDto } from './dto/google-exchange.dto';
+import {
+  AdminForgotPasswordDto,
+  AdminForgotPasswordVerifyDto,
+  AdminResetPasswordDto,
+} from './dto/admin-password-reset.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { GoogleAuthGuard, JwtAuthGuard } from './guards/auth.guards';
 import type { AuthenticatedRequest } from './interfaces/auth.interface';
@@ -164,6 +169,31 @@ export class AuthController {
   @ApiOperation({ summary: 'Admin login with username and password' })
   adminLogin(@Body() dto: AdminLoginDto) {
     return this.authService.adminLogin(dto);
+  }
+
+  @Post('admin/forgot-password/send-otp')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Admin password reset: send OTP to the admin mobile',
+  })
+  adminForgotPassword(@Body() dto: AdminForgotPasswordDto) {
+    return this.authService.sendAdminPasswordResetOtp(dto);
+  }
+
+  @Post('admin/forgot-password/verify-otp')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Admin password reset: verify OTP, get reset token',
+  })
+  adminForgotPasswordVerify(@Body() dto: AdminForgotPasswordVerifyDto) {
+    return this.authService.verifyAdminPasswordResetOtp(dto);
+  }
+
+  @Post('admin/forgot-password/reset')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Admin password reset: set a new password' })
+  adminResetPassword(@Body() dto: AdminResetPasswordDto) {
+    return this.authService.resetAdminPassword(dto);
   }
 
   @Get('google')
