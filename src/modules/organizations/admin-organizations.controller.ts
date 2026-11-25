@@ -194,6 +194,11 @@ abstract class BaseOrganizationsController {
 export class AdminPetshopsController extends BaseOrganizationsController {
   protected readonly kind = OrganizationKind.PETSHOP;
 
+  // Explicit constructor: Nest only reads DI metadata from decorated classes.
+  constructor(organizationsService: OrganizationsService) {
+    super(organizationsService);
+  }
+
   @Put(':id/categories')
   @ApiOperation({ summary: 'Replace the product categories' })
   setCategories(
@@ -213,6 +218,10 @@ export class AdminPetshopsController extends BaseOrganizationsController {
 @Controller('admin/shelters')
 export class AdminSheltersController extends BaseOrganizationsController {
   protected readonly kind = OrganizationKind.SHELTER;
+
+  constructor(organizationsService: OrganizationsService) {
+    super(organizationsService);
+  }
 
   @Post(':id/animals')
   addAnimal(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AnimalDto) {

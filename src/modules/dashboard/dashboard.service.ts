@@ -14,6 +14,7 @@ import { ClinicReview } from '../clinics/entities/clinic-review.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { Organization } from '../organizations/entities/organization.entity';
 import { Payment } from '../payments/entities/payment.entity';
+import { Pet } from '../pets/entities/pet.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { Subscription } from '../subscriptions/entities/subscription.entity';
 import { SupportTicket } from '../support/entities/support-ticket.entity';
@@ -51,21 +52,31 @@ export class DashboardService {
     const from = new Date(now.getTime() - days * DAY_MS);
     const previousFrom = new Date(from.getTime() - days * DAY_MS);
 
-    const [cards, reservationOverview, growth, map, recentActivity, issues] =
-      await Promise.all([
-        this.getCards(from, previousFrom),
-        this.getReservationOverview(from),
-        this.getGrowth(from, period === '1y' ? 'month' : 'day'),
-        this.getMap(),
-        this.getRecentActivity(),
-        this.getIssues(from),
-      ]);
+    const bucket = period === '1y' ? 'month' : 'day';
+    const [
+      cards,
+      trends,
+      reservationOverview,
+      growth,
+      map,
+      recentActivity,
+      issues,
+    ] = await Promise.all([
+      this.getCards(from, previousFrom),
+      this.getTrends(from, bucket),
+      this.getReservationOverview(from),
+      this.getGrowth(from, bucket),
+      this.getMap(),
+      this.getRecentActivity(),
+      this.getIssues(from),
+    ]);
 
     return {
       period,
       from,
       to: now,
       cards,
+      trends,
       reservationOverview,
       growth,
       map,
@@ -115,6 +126,9 @@ export class DashboardService {
       revenueBefore,
       activeSubscriptions,
       newSubscriptions,
+      petsTotal,
+      petsNow,
+      petsBefore,
     ] = await Promise.all([
       users
         .createQueryBuilder('u')
@@ -131,6 +145,20 @@ export class DashboardService {
       revenue(previousFrom, from),
       this.countPaidSubscriptions(),
       this.countPaidSubscriptions(from),
+      this.dataSource.getRepository(Pet).count(),
+      this.dataSource
+        .getRepository(Pet)
+        .createQueryBuilder('p')
+        .where('p.createdAt >= :start', { start: from })
+        .getCount(),
+      this.dataSource
+        .getRepository(Pet)
+        .createQueryBuilder('p')
+        .where('p.createdAt >= :start AND p.createdAt < :end', {
+          start: previousFrom,
+          end: from,
+        })
+        .getCount(),
     ]);
 
     const byRole = Object.fromEntries(PUBLIC_ROLES.map((role) => [role, 0]));
@@ -159,7 +187,73 @@ export class DashboardService {
         active: activeSubscriptions,
         newInPeriod: newSubscriptions,
       },
+      pets: {
+        total: petsTotal,
+        newInPeriod: petsNow,
+        changePercent: changePercent(petsNow, petsBefore),
+      },
     };
+  }
+
+  /**
+   * One value per bucket (day, or month for the 1y period) for each card, so
+   * the dashboard can draw sparklines. Missing buckets are zero-filled.
+   */
+  private async getTrends(from: Date, bucket: 'day' | 'month') {
+    const series = async (
+      entity: new () => object,
+      dateColumn: string,
+      valueSql = 'COUNT(*)',
+      where?: [string, Record<string, unknown>],
+    ): Promise<number[]> => {
+      const qb = this.dataSource
+        .getRepository(entity)
+        .createQueryBuilder('t')
+        .select(`date_trunc('${bucket}', t.${dateColumn})`, 'bucket')
+        .addSelect(valueSql, 'value')
+        .where(`t.${dateColumn} >= :from`, { from });
+      if (where) qb.andWhere(where[0], where[1]);
+      const rows = await qb
+        .groupBy('bucket')
+        .orderBy('bucket', 'ASC')
+        .getRawMany<{ bucket: Date; value: string }>();
+      const byKey = new Map(
+        rows.map((row) => [new Date(row.bucket).getTime(), Number(row.value)]),
+      );
+      const out: number[] = [];
+      const cursor = new Date(from);
+      if (bucket === 'month') cursor.setUTCDate(1);
+      cursor.setUTCHours(0, 0, 0, 0);
+      while (cursor.getTime() <= Date.now()) {
+        out.push(byKey.get(cursor.getTime()) ?? 0);
+        if (bucket === 'month') cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+        else cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+      return out;
+    };
+    const [users, pets, reservations, revenue, subscriptions] =
+      await Promise.all([
+        series(User, 'createdAt', 'COUNT(*)', [
+          't.role IN (:...roles)',
+          { roles: PUBLIC_ROLES },
+        ]),
+        series(Pet, 'createdAt'),
+        series(Reservation, 'createdAt'),
+        series(
+          Payment,
+          'paidAt',
+          'COALESCE(SUM(t.finalAmount - t.refundedAmount), 0)',
+          [
+            't.status IN (:...statuses)',
+            { statuses: [PaymentStatus.SUCCESS, PaymentStatus.REFUNDED] },
+          ],
+        ),
+        series(Subscription, 'createdAt', 'COUNT(*)', [
+          't.plan != :free',
+          { free: SubscriptionPlan.FREE },
+        ]),
+      ]);
+    return { users, pets, reservations, revenue, subscriptions };
   }
 
   private countPaidSubscriptions(since?: Date): Promise<number> {
