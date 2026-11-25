@@ -38,6 +38,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { decodeMultipartFilename } from '../../common/utils/multipart-filename';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { fileHasExpectedSignature } from '../../common/utils/file-signature';
@@ -196,7 +197,7 @@ export class AdminVetDocumentsController {
 
     response.set({
       'Content-Type': document.mimeType,
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(document.originalName)}`,
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(decodeMultipartFilename(document.originalName))}`,
     });
     return new StreamableFile(createReadStream(path));
   }

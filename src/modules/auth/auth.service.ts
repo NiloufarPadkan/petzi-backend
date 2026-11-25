@@ -29,6 +29,11 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
+import {
+  AdminForgotPasswordDto,
+  AdminForgotPasswordVerifyDto,
+  AdminResetPasswordDto,
+} from './dto/admin-password-reset.dto';
 import { VerifyOtpDto } from './dto/phone-otp.dto';
 import { TwoFactorLoginDto } from './dto/two-factor.dto';
 import { JwtPayload } from './interfaces/auth.interface';
@@ -219,6 +224,78 @@ export class AuthService {
     }
 
     return this.buildAuthResponse(user, 'ورود با موفقیت انجام شد');
+  }
+
+  // ---- admin forgot-password (OTP to the admin's mobile) ----
+
+  private async findAdminByIdentifier(
+    identifier: string,
+  ): Promise<User | null> {
+    const value = identifier.trim();
+    let user: User | null = null;
+    if (value.includes('@')) {
+      user = await this.usersService.findByEmail(value.toLowerCase());
+    } else if (/^(\+98|0098|98|0)?9\d{9}$/.test(value.replace(/\s/g, ''))) {
+      user = await this.usersService.findByPhone(normalizePhoneNumber(value));
+    } else {
+      user = await this.usersService.findByUsernameWithPassword(value);
+    }
+    return user && user.role === UserRole.ADMIN && !user.isSuspended
+      ? user
+      : null;
+  }
+
+  async sendAdminPasswordResetOtp(dto: AdminForgotPasswordDto) {
+    const admin = await this.findAdminByIdentifier(dto.identifier);
+    // Same response whether or not the account exists.
+    if (!admin) return this.buildOtpSentResponse();
+    const code = await this.sendOtpWithCooldown(
+      admin.phoneNumber,
+      OtpPurpose.ADMIN_PASSWORD_RESET,
+    );
+    return this.buildOtpSentResponse(code);
+  }
+
+  async verifyAdminPasswordResetOtp(dto: AdminForgotPasswordVerifyDto) {
+    const admin = await this.findAdminByIdentifier(dto.identifier);
+    const valid =
+      !!admin &&
+      (await this.otpService.verifyOtp(
+        admin.phoneNumber,
+        dto.code,
+        OtpPurpose.ADMIN_PASSWORD_RESET,
+      ));
+    if (!admin || !valid) {
+      throw new BadRequestException('کد تأیید نامعتبر یا منقضی شده است');
+    }
+    const expiresIn = this.configService.get<number>(
+      'otp.registrationTokenExpiresInSeconds',
+    )!;
+    const { jti } = await this.oneTimeTokenService.issue({
+      purpose: OneTimeTokenPurpose.ADMIN_PASSWORD_RESET,
+      expiresInSeconds: expiresIn,
+      phoneNumber: admin.phoneNumber,
+      userId: admin.id,
+    });
+    return { message: 'کد تأیید شد', resetToken: jti, expiresIn };
+  }
+
+  async resetAdminPassword(dto: AdminResetPasswordDto) {
+    const token = await this.oneTimeTokenService.consume(
+      dto.resetToken,
+      OneTimeTokenPurpose.ADMIN_PASSWORD_RESET,
+    );
+    const admin = token?.userId
+      ? await this.usersService.findById(token.userId)
+      : null;
+    if (!admin || admin.role !== UserRole.ADMIN) {
+      throw new BadRequestException('لینک بازیابی نامعتبر یا منقضی شده است');
+    }
+    await this.usersService.update(admin.id, {
+      password: await bcrypt.hash(dto.newPassword, 12),
+      tokenVersion: admin.tokenVersion + 1,
+    });
+    return { message: 'رمز عبور با موفقیت تغییر کرد' };
   }
 
   async handleGoogleLogin(googleUser: {

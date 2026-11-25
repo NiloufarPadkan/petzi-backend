@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { OtpPurpose } from '../../common/enums/otp-purpose.enum';
@@ -174,5 +171,112 @@ describe('AuthService registration token flow', () => {
       service.verifyRegisterOtp('09123456789', '123456'),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(otpService.verifyOtp).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService admin password reset', () => {
+  const admin = {
+    id: 'a1',
+    role: UserRole.ADMIN,
+    phoneNumber: '09129999999',
+    isSuspended: false,
+    tokenVersion: 2,
+  };
+  const usersService = {
+    findByPhone: jest.fn(),
+    findByEmail: jest.fn(),
+    findByUsernameWithPassword: jest.fn(),
+    findById: jest.fn(),
+    update: jest.fn(),
+  };
+  const otpService = {
+    verifyOtp: jest.fn(),
+    createOtp: jest.fn(),
+    invalidateActiveOtps: jest.fn(),
+  };
+  const oneTimeTokenService = {
+    issue: jest
+      .fn()
+      .mockResolvedValue({ jti: 'reset-jti', expiresAt: new Date() }),
+    consume: jest.fn(),
+  };
+  const service = new AuthService(
+    usersService as unknown as UsersService,
+    otpService as unknown as OtpService,
+    { sendOtp: jest.fn() } as unknown as SmsService,
+    { sign: jest.fn() } as unknown as JwtService,
+    {
+      get: jest.fn(
+        (k: string) =>
+          ({
+            nodeEnv: 'development',
+            'otp.expiresInSeconds': 120,
+            'otp.registrationTokenExpiresInSeconds': 900,
+          })[k],
+      ),
+    } as unknown as ConfigService,
+    oneTimeTokenService as unknown as OneTimeTokenService,
+  );
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('sends no OTP for an unknown identifier but answers the same way', async () => {
+    usersService.findByUsernameWithPassword.mockResolvedValue(null);
+    const res = await service.sendAdminPasswordResetOtp({
+      identifier: 'nobody',
+    });
+    expect(otpService.createOtp).not.toHaveBeenCalled();
+    expect(res.code).toBeUndefined();
+  });
+
+  it('sends an OTP to the admin mobile when found by phone', async () => {
+    usersService.findByPhone.mockResolvedValue(admin);
+    otpService.createOtp.mockResolvedValue('123456');
+    const res = await service.sendAdminPasswordResetOtp({
+      identifier: '09129999999',
+    });
+    expect(otpService.createOtp).toHaveBeenCalledWith(
+      '09129999999',
+      OtpPurpose.ADMIN_PASSWORD_RESET,
+    );
+    expect(res.code).toBe('123456');
+  });
+
+  it('rejects a wrong OTP and issues a reset token for a right one', async () => {
+    usersService.findByUsernameWithPassword.mockResolvedValue(admin);
+    otpService.verifyOtp
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    await expect(
+      service.verifyAdminPasswordResetOtp({
+        identifier: 'e2eadmin',
+        code: '000000',
+      }),
+    ).rejects.toThrow(BadRequestException);
+    const ok = await service.verifyAdminPasswordResetOtp({
+      identifier: 'e2eadmin',
+      code: '123456',
+    });
+    expect(ok.resetToken).toBe('reset-jti');
+  });
+
+  it('resets the password and bumps the token version', async () => {
+    oneTimeTokenService.consume.mockResolvedValue({ userId: 'a1' });
+    usersService.findById.mockResolvedValue(admin);
+    await service.resetAdminPassword({
+      resetToken: 'reset-jti',
+      newPassword: 'NewPass1!',
+    });
+    expect(usersService.update).toHaveBeenCalledWith(
+      'a1',
+      expect.objectContaining({ tokenVersion: 3 }),
+    );
+  });
+
+  it('rejects an invalid reset token', async () => {
+    oneTimeTokenService.consume.mockResolvedValue(null);
+    await expect(
+      service.resetAdminPassword({ resetToken: 'x', newPassword: 'NewPass1!' }),
+    ).rejects.toThrow(BadRequestException);
   });
 });

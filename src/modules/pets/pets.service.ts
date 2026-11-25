@@ -12,6 +12,7 @@ import { PetStatus } from '../../common/enums/pet-status.enum';
 import { ApproximateAge } from '../../common/enums/approximate-age.enum';
 import { PetType } from '../../common/enums/pet-type.enum';
 import { UserRole } from '../../common/enums/user-role.enum';
+import { decodeMultipartFilename } from '../../common/utils/multipart-filename';
 import { removeUploadUrls } from '../../common/utils/upload-cleanup';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { User } from '../users/entities/user.entity';
@@ -233,7 +234,7 @@ export class PetsService {
     const documents = files.map((file) =>
       this.documentsRepository.create({
         petId,
-        originalName: file.originalname,
+        originalName: decodeMultipartFilename(file.originalname),
         fileUrl: `/uploads/pet-documents/${file.filename}`,
         mimeType: file.mimetype,
         sizeBytes: file.size,
@@ -245,7 +246,7 @@ export class PetsService {
       message: 'فایل‌ها با موفقیت آپلود شدند',
       documents: saved.map((doc) => ({
         id: doc.id,
-        originalName: doc.originalName,
+        originalName: decodeMultipartFilename(doc.originalName),
         fileUrl: this.getDocumentDownloadUrl(doc),
         mimeType: doc.mimeType,
         sizeBytes: doc.sizeBytes,
@@ -542,7 +543,7 @@ export class PetsService {
       additionalNotes: pet.additionalNotes,
       documents: pet.documents?.map((d) => ({
         id: d.id,
-        originalName: d.originalName,
+        originalName: decodeMultipartFilename(d.originalName),
         fileUrl: this.getDocumentDownloadUrl(d),
         mimeType: d.mimeType,
         sizeBytes: d.sizeBytes,

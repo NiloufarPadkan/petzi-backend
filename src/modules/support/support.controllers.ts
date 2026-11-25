@@ -28,6 +28,7 @@ import {
 } from '@nestjs/swagger';
 import { AdminOnly } from '../../common/decorators/admin-only.decorator';
 import { imageUploadOptions, saveImage } from '../../common/utils/image-upload';
+import { decodeMultipartFilename } from '../../common/utils/multipart-filename';
 import { removeUploadUrls } from '../../common/utils/upload-cleanup';
 import { SettingsGroup } from '../../common/enums/admin-panel.enums';
 import { JwtAuthGuard } from '../auth/guards/auth.guards';
@@ -280,7 +281,7 @@ export class PublicSupportController {
       for (const file of files ?? []) {
         stored.push({
           url: await saveImage(file, SUPPORT_ATTACHMENT_DIRECTORY),
-          name: file.originalname.slice(0, 200),
+          name: decodeMultipartFilename(file.originalname).slice(0, 200),
           mimeType: file.mimetype,
           sizeBytes: file.size,
         });

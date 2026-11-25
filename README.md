@@ -96,14 +96,16 @@ See `.env.example` for all options. Key variables:
 ## Development seed
 
 `src/seeds/dev-seed.ts` fills a development database with two clinics (with
-gallery images), four vets, services, working hours, approved reviews, and a
-demo owner with pets and reservations: a completed, unreviewed visit (to test
-reviews) and an upcoming unpaid one (to test payment). It is idempotent and
-refuses to run with `NODE_ENV=production`.
+gallery images), four vets, services, working hours, approved reviews, demo and
+reviewer pets (with weight / vaccine / medication / event history for charts),
+and reservations: a completed, unreviewed visit (to test reviews) and an
+upcoming unpaid one (to test payment). It is idempotent and refuses to run with
+`NODE_ENV=production`.
 
 ```bash
 npm run seed:dev                                          # from source
 docker exec petzi-backend-api-1 node dist/seeds/dev-seed.js   # in the API container
+npm run seed:fill-pets                                    # enrich every active pet in the DB
 ```
 
 Log in as the demo owner with `09120000000`; the OTP is printed by the mock
@@ -225,3 +227,4 @@ src/
 | `npm run start:prod` | Run compiled app |
 | `npm run test` | Run unit tests |
 | `npm run seed:dev` | Seed development data (not in production) |
+| `npm run seed:fill-pets` | Fill all active pets with chart/care mock history |

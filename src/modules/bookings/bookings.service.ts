@@ -31,6 +31,9 @@ import { ReservationPaymentsService } from './reservation-payments.service';
 
 const ACTIVE = [ReservationStatus.PENDING, ReservationStatus.CONFIRMED];
 
+/** Pet owners may cancel only when the visit starts more than this far away. */
+const CANCEL_LEAD_MS = 3 * 60 * 60 * 1000;
+
 const STATUS_LABELS: Record<ReservationStatus, string> = {
   [ReservationStatus.PENDING]: 'در انتظار تایید',
   [ReservationStatus.CONFIRMED]: 'تایید شده',
@@ -219,7 +222,12 @@ export class BookingsService {
   async cancel(ownerId: string, id: string, reason?: string) {
     const reservation = await this.getOwned(ownerId, id);
     if (!this.canCancel(reservation)) {
-      throw new BadRequestException('این رزرو قابل لغو نیست');
+      throw new BadRequestException(
+        ACTIVE.includes(reservation.status) &&
+          reservation.scheduledAt.getTime() > Date.now()
+          ? 'کمتر از ۳ ساعت تا نوبت مانده و قابل لغو نیست'
+          : 'این رزرو قابل لغو نیست',
+      );
     }
     await this.reservationsRepository.update(id, {
       status: ReservationStatus.CANCELLED,
@@ -337,9 +345,10 @@ export class BookingsService {
   }
 
   private canCancel(reservation: Reservation): boolean {
+    // Within CANCEL_LEAD_MS of the start, cancel is blocked (ADR-0004 in PETZI).
     return (
       ACTIVE.includes(reservation.status) &&
-      reservation.scheduledAt.getTime() > Date.now()
+      reservation.scheduledAt.getTime() > Date.now() + CANCEL_LEAD_MS
     );
   }
 
